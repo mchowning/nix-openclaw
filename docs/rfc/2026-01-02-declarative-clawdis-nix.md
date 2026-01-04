@@ -1,4 +1,4 @@
-# RFC: Declarative Clawdis as a Nix Package (nix-clawdis)
+# RFC: Declarative Clawdbot as a Nix Package (nix-clawdbot)
 
 - Date: 2026-01-02
 - Status: Implementing
@@ -6,7 +6,7 @@
 
 ## 1) Narrative: what we are building and why
 
-Clawdis is powerful but hard to install and configure for new users, especially those who do not want to learn Nix internals. We need a batteries‑included, obvious, and safe path to get a working Clawdis instance with minimal friction. This RFC proposes a dedicated public repo, `nix-clawdis`, that packages Clawdis for Nix and provides a declarative, user‑friendly configuration layer with strong defaults and an agent‑first onboarding flow.
+Clawdbot is powerful but hard to install and configure for new users, especially those who do not want to learn Nix internals. We need a batteries‑included, obvious, and safe path to get a working Clawdbot instance with minimal friction. This RFC proposes a dedicated public repo, `nix-clawdbot`, that packages Clawdbot for Nix and provides a declarative, user‑friendly configuration layer with strong defaults and an agent‑first onboarding flow.
 
 The goal is a **fully declarative bootstrap**: users provide a small set of inputs (token path + allowlist), and the setup is deterministic and repeatable.
 
@@ -22,7 +22,7 @@ The goal is a **fully declarative bootstrap**: users provide a small set of inpu
 ## 1.2) Scope boundaries (avoid confusion)
 
 This RFC is only about:
-- The public `nix-clawdis` repo (package + module + docs).
+- The public `nix-clawdbot` repo (package + module + docs).
 - A generic, end‑user Nix setup that lives outside any personal config repo.
 
 This RFC is explicitly **not** about:
@@ -32,7 +32,7 @@ This RFC is explicitly **not** about:
 ## 2) Goals / Non‑goals
 
 Goals:
-- Provide a Nix package for Clawdis and a Home Manager module with batteries‑included defaults.
+- Provide a Nix package for Clawdbot and a Home Manager module with batteries‑included defaults.
 - Provide a macOS app bundle package aligned to the gateway version.
 - Make configuration technically light with explicit options and guardrails.
 - Telegram‑first configuration and defaults.
@@ -40,17 +40,17 @@ Goals:
 - New user can get a working bot in 10 minutes without understanding Nix internals.
 
 Non‑goals:
-- Rewriting Clawdis core functionality.
+- Rewriting Clawdbot core functionality.
 - Supporting non‑Nix install paths in this repo.
 - Shipping a hosted SaaS or paid hosting.
-- Replacing upstream Clawdis docs.
+- Replacing upstream Clawdbot docs.
 - Cross‑platform support (Linux/Windows) in v1.
 - CI automation in v1.
 
 ## 3) System overview
 
-`nix-clawdis` is a public repo that provides (macOS‑only in v1, no CI in v1):
-- A Nix package derivation for the Clawdis gateway.
+`nix-clawdbot` is a public repo that provides (macOS‑only in v1, no CI in v1):
+- A Nix package derivation for the Clawdbot gateway.
 - A Nix package for the macOS app bundle (DMG).
 - A Home Manager module for user‑level config and service wiring.
 - A nix‑darwin module for macOS users (optional, thin wrapper over HM).
@@ -59,8 +59,8 @@ Non‑goals:
 
 ## 4) Components and responsibilities
 
-- **Package derivation**: builds Clawdis gateway from a pinned source.
-- **App bundle**: installs Clawdis.app from a pinned DMG matching the gateway version.
+- **Package derivation**: builds Clawdbot gateway from a pinned source.
+- **App bundle**: installs Clawdbot.app from a pinned DMG matching the gateway version.
 - **Home Manager module**: declarative config, writes `~/.clawdis/clawdis.json`, manages services.
 - **Flake outputs**:
   - `packages.<system>.clawdis` (default batteries‑included bundle)
@@ -93,7 +93,7 @@ The README is the only supported onboarding path. It must include:
 ## 8) Backing tools (batteries‑included)
 
 - Base and extended toolchains are installed via Nix by default.
-- Tools correspond to upstream Clawdis skill installers (brew/go/node/uv) mapped into nixpkgs where possible.
+- Tools correspond to upstream Clawdbot skill installers (brew/go/node/uv) mapped into nixpkgs where possible.
 
 ## 9) Compatibility guarantees
 
@@ -106,7 +106,7 @@ The README is the only supported onboarding path. It must include:
 We will maintain two distinct setups:
 
 - **Prod (stable)**
-  - Uses `nix-clawdis` batteries‑included package.
+  - Uses `nix-clawdbot` batteries‑included package.
   - Pinned to released tags.
   - No source builds.
   - Launchd managed by Nix.

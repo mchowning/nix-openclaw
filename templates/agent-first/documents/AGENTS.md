@@ -1,4 +1,4 @@
-# AGENTS.md — Clawdis Workspace
+# AGENTS.md — Clawdbot Workspace
 
 This file is managed by Nix. Update it in the repo, not in the workspace.
 

@@ -1,5 +1,5 @@
 {
-  description = "Hello-world Clawdis plugin";
+  description = "Hello-world Clawdbot plugin";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

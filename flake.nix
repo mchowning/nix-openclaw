@@ -1,5 +1,5 @@
 {
-  description = "nix-clawdis: declarative Clawdis packaging for macOS";
+  description = "nix-clawdbot: declarative Clawdbot packaging for macOS";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

@@ -8,7 +8,7 @@ stdenvNoCC.mkDerivation {
   version = "2.0.0-beta4";
 
   src = fetchzip {
-    url = "https://github.com/steipete/clawdis/releases/download/v2.0.0-beta4/Clawdis-2.0.0-beta4.zip";
+    url = "https://github.com/clawdbot/clawdbot/releases/download/v2.0.0-beta4/Clawdis-2.0.0-beta4.zip";
     hash = "sha256-Oa7cejVFfZtJBSmjDaRjqocVyXo+WeS/xucGpJFDzIg=";
     stripRoot = false;
   };
@@ -28,8 +28,8 @@ stdenvNoCC.mkDerivation {
   '';
 
   meta = with lib; {
-    description = "Clawdis macOS app bundle";
-    homepage = "https://github.com/steipete/clawdis";
+    description = "Clawdbot macOS app bundle";
+    homepage = "https://github.com/clawdbot/clawdbot";
     license = licenses.mit;
     platforms = platforms.darwin;
   };

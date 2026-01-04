@@ -1,24 +1,24 @@
 {
-  description = "Clawdis local";
+  description = "Clawdbot local";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
-    nix-clawdis.url = "github:joshp123/nix-clawdis";
+    nix-clawdbot.url = "github:clawdbot/nix-clawdbot";
   };
 
-  outputs = { self, nixpkgs, home-manager, nix-clawdis }:
+  outputs = { self, nixpkgs, home-manager, nix-clawdbot }:
     let
       # REPLACE: aarch64-darwin (Apple Silicon) or x86_64-darwin (Intel)
       system = "<system>";
-      pkgs = import nixpkgs { inherit system; overlays = [ nix-clawdis.overlays.default ]; };
+      pkgs = import nixpkgs { inherit system; overlays = [ nix-clawdbot.overlays.default ]; };
     in {
       # REPLACE: <user> with your macOS username (run `whoami`)
       homeConfigurations."<user>" = home-manager.lib.homeManagerConfiguration {
         inherit pkgs;
         modules = [
-          nix-clawdis.homeManagerModules.clawdis
+          nix-clawdbot.homeManagerModules.clawdis
           {
             # Required for Home Manager standalone
             home.username = "<user>";

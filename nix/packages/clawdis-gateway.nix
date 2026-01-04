@@ -65,8 +65,8 @@ stdenv.mkDerivation (finalAttrs: {
   '';
 
   meta = with lib; {
-    description = "Telegram-first AI gateway (Clawdis)";
-    homepage = "https://github.com/joshp123/clawdis";
+    description = "Telegram-first AI gateway (Clawdbot)";
+    homepage = "https://github.com/clawdbot/clawdbot";
     license = licenses.mit;
     platforms = platforms.darwin;
     mainProgram = "clawdis";

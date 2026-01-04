@@ -1,12 +1,12 @@
-# nix-clawdis
+# nix-clawdbot
 
-> Declarative Clawdis. Bulletproof by default.
+> Declarative Clawdbot. Bulletproof by default.
 >
 > macOS only. Linux/Windows are out of scope for now.
 >
 > <sub>[skip to agent copypasta](#give-this-to-your-ai-agent)</sub>
 >
-> <sub>Questions? Join the Clawdis Discord and ask in **#nix**.</sub>
+> <sub>Questions? Join the Clawdbot Discord and ask in **#nix-packaging**: https://discord.com/channels/1456350064065904867/1457003026412736537</sub>
 
 ![On declarative build systems](docs/images/on-declarative-build-systems.png)
 
@@ -27,7 +27,7 @@ This README is the **single source of truth** for maintainers.
 
 ## Why this exists
 
-Clawdis is the right product. An AI assistant that lives in Telegram, controls your Mac, and actually does things.
+Clawdbot is the right product. An AI assistant that lives in Telegram, controls your Mac, and actually does things.
 
 This repo wraps it in Nix: a pinned, reproducible package that installs the gateway, the macOS app, and all the tools declaratively. Every dependency locked. Every update intentional. Rollback in seconds.
 
@@ -51,19 +51,19 @@ You talk to Telegram, your Mac does things.
 Copy this entire block and paste it to Claude, Cursor, or whatever you use:
 
 ```text
-I want to set up nix-clawdis on my Mac.
+I want to set up nix-clawdbot on my Mac.
 
-Repository: github:joshp123/nix-clawdis
+Repository: github:clawdbot/nix-clawdbot
 
-What nix-clawdis is:
-- Batteries-included Nix package for Clawdis (AI assistant gateway)
+What nix-clawdbot is:
+- Batteries-included Nix package for Clawdbot (AI assistant gateway)
 - Installs gateway + macOS app + tools (whisper, spotify, cameras, etc)
 - Runs as a launchd service, survives reboots
 
 What I need you to do:
 1. Check if Determinate Nix is installed (if not, install it)
-2. Create a local flake at ~/code/clawdis-local using templates/agent-first/flake.nix
-3. Create a docs dir next to the config (e.g., ~/code/clawdis-local/documents) with AGENTS.md, SOUL.md, TOOLS.md
+2. Create a local flake at ~/code/clawdbot-local using templates/agent-first/flake.nix
+3. Create a docs dir next to the config (e.g., ~/code/clawdbot-local/documents) with AGENTS.md, SOUL.md, TOOLS.md
    - If ~/.clawdis/workspace already has these files, adopt them into the documents dir first
 3. Help me create a Telegram bot (@BotFather) and get my chat ID (@userinfobot)
 4. Set up secrets (bot token, Anthropic key) - plain files at ~/.secrets/ is fine
@@ -110,7 +110,7 @@ Then: `home-manager switch --flake .#youruser`
 
 This is still single‑instance, but uses `instances.default` to unlock per‑group mention rules.
 If `instances` is set, you don’t need `programs.clawdis.enable`.
-Group mention overrides below mirror upstream Clawdis config.
+Group mention overrides below mirror upstream Clawdbot config.
 Secrets are shown using `/run/agenix/...` (from a repo with your agenix secrets), but any file path works.
 Docs are managed from `./documents` and symlinked into the workspace on each switch.
 
@@ -183,14 +183,14 @@ pinned to a released version (no local app builds yet).
 ```nix
 # flake inputs (pin prod + app)
 inputs = {
-  nix-clawdis.url = "github:joshp123/nix-clawdis?ref=v0.1.0"; # pins macOS app + gateway bundle
+  nix-clawdbot.url = "github:clawdbot/nix-clawdbot?ref=v0.1.0"; # pins macOS app + gateway bundle
 };
 
 let
   prod = {
     enable = true;
-    # Prod gateway pin (comes from nix-clawdis input @ v0.1.0 above).
-    package = inputs.nix-clawdis.packages.${pkgs.system}.clawdis-gateway;
+    # Prod gateway pin (comes from nix-clawdbot input @ v0.1.0 above).
+    package = inputs.nix-clawdbot.packages.${pkgs.system}.clawdis-gateway;
     providers.telegram.enable = true;
     providers.telegram.botTokenFile = "/run/agenix/telegram-prod";
     providers.telegram.allowFrom = [ 12345678 ];
@@ -198,19 +198,19 @@ let
     plugins = [ { source = "github:owner/your-plugin"; } ];
   };
 in {
-  # Pinned macOS app (POC: no local app builds, uses nix-clawdis @ v0.1.0 above).
+  # Pinned macOS app (POC: no local app builds, uses nix-clawdbot @ v0.1.0 above).
   programs.clawdis.appPackage =
-    inputs.nix-clawdis.packages.${pkgs.system}.clawdis-app;
+    inputs.nix-clawdbot.packages.${pkgs.system}.clawdis-app;
   programs.clawdis.documents = ./documents;
   programs.clawdis.instances = {
     prod = prod;
     dev = prod // {
-      # Dev uses the same pinned macOS app (from nix-clawdis input),
+      # Dev uses the same pinned macOS app (from nix-clawdbot input),
       # but overrides the gateway package to a local checkout.
       providers.telegram.botTokenFile = "/run/agenix/telegram-dev";
       gatewayPort = 18790;
       # Local gateway checkout (path). App stays pinned.
-      gatewayPath = "/Users/you/code/clawdis";
+      gatewayPath = "/Users/you/code/clawdbot";
       # Local plugin overrides prod if names collide (last wins).
       plugins = prod.plugins ++ [
         { source = "path:/Users/you/code/your-plugin"; }
@@ -283,10 +283,10 @@ Use the `hello` CLI to print a greeting.
 **Hello‑world uses no config:** it declares empty `needs` and requires no
 per‑plugin `config`.
 
-## Paste this prompt to your coding agent (make your plugin nix‑clawdis‑native)
+## Paste this prompt to your coding agent (make your plugin nix‑clawdbot‑native)
 
 ```text
-Goal: Make this repo a nix‑clawdis‑native plugin with the standard contract.
+Goal: Make this repo a nix‑clawdbot‑native plugin with the standard contract.
 
 Contract to implement:
 1) Add clawdisPlugin output in flake.nix:
@@ -353,7 +353,7 @@ Deliverables: flake output, env overrides, AGENTS.md, skill update.
 
 - Nix pulls the plugin, reads `clawdisPlugin`, and installs the CLI(s).
 - Skills are symlinked into `~/.clawdis/skills/<plugin>/<skill>`.
-- Clawdis loads managed skills automatically at runtime.
+- Clawdbot loads managed skills automatically at runtime.
 - Any plugin services run as **user‑level** launchd agents (no sudo).
 - MVP scope: tools/skills should come **from plugins only** (no ad‑hoc installs).
 - Plugin `settings` are rendered to `config.json` in the plugin’s first `stateDir`.
@@ -422,11 +422,11 @@ home-manager switch --rollback  # revert
 
 ## Upstream
 
-Wraps [Clawdis](https://github.com/steipete/clawdis) by Peter Steinberger.
+Wraps [Clawdbot](https://github.com/clawdbot/clawdbot) by Peter Steinberger.
 
 ## Philosophy
 
-The Zen of ~~Python~~ Clawdis, ~~by~~ shamelessly stolen from Tim Peters
+The Zen of ~~Python~~ Clawdbot, ~~by~~ shamelessly stolen from Tim Peters
 
 Beautiful is better than ugly.  
 Explicit is better than implicit.  

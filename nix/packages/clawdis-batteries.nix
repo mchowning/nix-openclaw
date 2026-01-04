@@ -11,8 +11,8 @@ buildEnv {
   pathsToLink = [ "/bin" "/Applications" ];
 
   meta = with lib; {
-    description = "Clawdis batteries-included bundle (gateway + app + tools)";
-    homepage = "https://github.com/steipete/clawdis";
+    description = "Clawdbot batteries-included bundle (gateway + app + tools)";
+    homepage = "https://github.com/clawdbot/clawdbot";
     license = licenses.mit;
     platforms = platforms.darwin;
   };

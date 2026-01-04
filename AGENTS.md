@@ -1,4 +1,4 @@
-# AGENTS.md — nix-clawdis
+# AGENTS.md — nix-clawdbot
 
 Single source of truth for product direction: `README.md`.
 
@@ -17,7 +17,7 @@ Defaults:
 
 Philosophy:
 
-The Zen of ~~Python~~ Clawdis, ~~by~~ shamelessly stolen from Tim Peters
+The Zen of ~~Python~~ Clawdbot, ~~by~~ shamelessly stolen from Tim Peters
 
 Beautiful is better than ugly.  
 Explicit is better than implicit.  
