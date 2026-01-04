@@ -29,10 +29,10 @@ let
   };
 
   firstPartySources = let
-    stepieteRev = "90aeee0490fd21528756db05262421fd5f769415";
-    stepieteNarHash = "sha256-9l3RyhkGocrQ3qsQ+Eigb3CDpHroUp46r2t5WDxvbdw=";
+    stepieteRev = "e4e2cac265de35175015cf1ae836b0b30dddd7b7";
+    stepieteNarHash = "sha256-L8bKt5rK78dFP3ZoP1Oi1SSAforXVHZDsSiDO+NsvEE=";
     stepiete = tool:
-      "github:clawdbot/nix-stepiete-tools?dir=tools/${tool}&rev=${stepieteRev}&narHash=${stepieteNarHash}";
+      "github:clawdbot/nix-steipete-tools?dir=tools/${tool}&rev=${stepieteRev}&narHash=${stepieteNarHash}";
   in {
     summarize = stepiete "summarize";
     peekaboo = stepiete "peekaboo";
