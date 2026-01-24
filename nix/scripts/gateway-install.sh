@@ -2,7 +2,7 @@
 set -e
 mkdir -p "$out/lib/openclaw" "$out/bin"
 
-cp -r dist node_modules package.json ui "$out/lib/openclaw/"
+cp -r dist node_modules package.json ui docs "$out/lib/openclaw/"
 if [ -d extensions ]; then
   cp -r extensions "$out/lib/openclaw/"
 fi
