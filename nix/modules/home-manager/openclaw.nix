@@ -54,8 +54,8 @@ let
   };
 
   firstPartySources = let
-    stepieteRev = "e4e2cac265de35175015cf1ae836b0b30dddd7b7";
-    stepieteNarHash = "sha256-L8bKt5rK78dFP3ZoP1Oi1SSAforXVHZDsSiDO+NsvEE=";
+    stepieteRev = "dbf0a31a57407d9140e32357ea8d0215bd9feed9";
+    stepieteNarHash = "sha256-QkPl/Rgk9DXgaVNhjvHHHjy5e81j+MzcVOouZRdUTLA=";
     stepiete = tool:
       "github:openclaw/nix-steipete-tools?dir=tools/${tool}&rev=${stepieteRev}&narHash=${stepieteNarHash}";
   in {
@@ -537,15 +537,24 @@ let
 
   resolvePlugin = plugin: let
     flake = builtins.getFlake plugin.source;
-    openclawPlugin =
+    system = pkgs.stdenv.hostPlatform.system;
+    openclawPluginRaw =
       if flake ? openclawPlugin then flake.openclawPlugin
       else throw "openclawPlugin missing in ${plugin.source}";
-    needs = openclawPlugin.needs or {};
+    openclawPlugin =
+      if builtins.isFunction openclawPluginRaw
+      then openclawPluginRaw system
+      else openclawPluginRaw;
+    resolvedPlugin =
+      if openclawPlugin == null
+      then throw "openclawPlugin is null in ${plugin.source} for ${system}"
+      else openclawPlugin;
+    needs = resolvedPlugin.needs or {};
   in {
     source = plugin.source;
-    name = openclawPlugin.name or (throw "openclawPlugin.name missing in ${plugin.source}");
-    skills = openclawPlugin.skills or [];
-    packages = openclawPlugin.packages or [];
+    name = resolvedPlugin.name or (throw "openclawPlugin.name missing in ${plugin.source}");
+    skills = resolvedPlugin.skills or [];
+    packages = resolvedPlugin.packages or [];
     needs = {
       stateDirs = needs.stateDirs or [];
       requiredEnv = needs.requiredEnv or [];
