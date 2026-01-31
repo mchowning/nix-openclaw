@@ -16,7 +16,7 @@ let
     then (pkgs.openclawPackages.withTools toolOverrides).openclaw
     else cfg.package;
   appPackage = if cfg.appPackage != null then cfg.appPackage else defaultPackage;
-  generatedConfigOptions = import ../../../generated/openclaw-config-options.nix { lib = lib; };
+  generatedConfigOptions = import ../../../../generated/openclaw-config-options.nix { lib = lib; };
 
   firstPartySources = let
     stepieteRev = "76188dc559493e752f23a53d4563b77dea7c0428";
