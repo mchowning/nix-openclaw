@@ -190,7 +190,8 @@ in {
     };
 
     config = lib.mkOption {
-      type = lib.types.submodule { options = openclawLib.generatedConfigOptions; };
+      # type = lib.types.submodule { options = openclawLib.generatedConfigOptions; };
+      type = lib.types.attrsOf lib.types.anything;
       default = {};
       description = "OpenClaw config (schema-typed).";
     };
