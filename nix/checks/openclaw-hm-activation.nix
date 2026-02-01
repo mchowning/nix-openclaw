@@ -70,6 +70,8 @@ pkgs.testers.nixosTest {
               ];
               Restart = lib.mkForce "no";
               RestartSec = lib.mkForce "0";
+              StandardOutput = lib.mkForce "journal";
+              StandardError = lib.mkForce "journal";
             };
           };
       };
