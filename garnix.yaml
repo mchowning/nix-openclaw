@@ -11,4 +11,6 @@ builds:
     - "checks.x86_64-linux.gateway"
     - "checks.x86_64-linux.gateway-tests"
     - "checks.x86_64-linux.config-options"
+    - "checks.x86_64-linux.config-validity"
+    - "checks.x86_64-linux.package-contents"
     - "checks.x86_64-linux.hm-activation"
