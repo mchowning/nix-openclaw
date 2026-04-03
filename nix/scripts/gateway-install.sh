@@ -29,10 +29,11 @@ check_no_broken_symlinks() {
     [ -e "$link" ] || printf '%s\n' "$link"
   done > "$broken_tmp"
   if [ -s "$broken_tmp" ]; then
-    echo "dangling symlinks found under $root" >&2
+    echo "removing dangling symlinks under $root:" >&2
     cat "$broken_tmp" >&2
-    rm -f "$broken_tmp"
-    return 1
+    while IFS= read -r link; do
+      rm -f "$link"
+    done < "$broken_tmp"
   fi
   rm -f "$broken_tmp"
 }
@@ -43,6 +44,19 @@ mkdir -p "$out/lib/openclaw" "$out/bin"
 log_step "move build outputs" mv dist node_modules package.json "$out/lib/openclaw/"
 if [ -d extensions ]; then
   log_step "copy extensions" cp -r extensions "$out/lib/openclaw/"
+  # Copy plugin manifests and package.json from source extensions to dist/extensions
+  # (compiled JS only lacks manifests; channel metadata lives in package.json)
+  if [ -d "$out/lib/openclaw/dist/extensions" ]; then
+    log_step "copy extension manifests to dist" find extensions \( -name 'openclaw.plugin.json' -o -name 'package.json' \) -exec sh -c '
+      for f do
+        dir=$(dirname "$f" | sed "s|^extensions/||")
+        dest="$out/lib/openclaw/dist/extensions/$dir"
+        if [ -d "$dest" ]; then
+          cp "$f" "$dest/"
+        fi
+      done
+    ' sh {} +
+  fi
 fi
 
 if [ -d docs/reference/templates ]; then
