@@ -40,6 +40,7 @@ let
     "releaseVersion"
     "applyPublicSurfaceHardlinksPatch"
     "applySkipPluginAutoEnableNixModePatch"
+    "publicSurfaceHardlinksPatch"
     "fsSafeSource"
   ];
 
@@ -59,6 +60,8 @@ let
       fetchFromGitHub sourceFetch;
 
   fsSafeSource = if sourceInfo ? fsSafeSource then fetchFromGitHub sourceInfo.fsSafeSource else null;
+  publicSurfaceHardlinksPatch =
+    sourceInfo.publicSurfaceHardlinksPatch or ../patches/allow-package-public-surface-hardlinks.patch;
 
   nodeAddonApi = import ../packages/node-addon-api.nix { inherit stdenv fetchurl; };
 
@@ -88,7 +91,7 @@ let
     PATCH_BUNDLED_RUNTIME_DEPS_SCRIPT = "${../patches/stage-bundled-plugin-runtime-deps.mjs}";
     PATCH_PUBLIC_SURFACE_HARDLINKS =
       if sourceInfo.applyPublicSurfaceHardlinksPatch or true then
-        "${../patches/allow-package-public-surface-hardlinks.patch}"
+        "${publicSurfaceHardlinksPatch}"
       else
         "";
     PATCH_SKIP_PLUGIN_AUTO_ENABLE_NIX_MODE =

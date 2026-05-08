@@ -12,5 +12,6 @@
     hash = "sha256-jndOOSSFROyrK4RiwAsJfUuCJTj7qbmmm4Qz8BqtJ/c=";
   };
 
+  publicSurfaceHardlinksPatch = ../patches/allow-package-public-surface-hardlinks-open-root.patch;
   applySkipPluginAutoEnableNixModePatch = false;
 }

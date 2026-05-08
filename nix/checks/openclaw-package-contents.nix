@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  nodejs_22,
   openclawGateway,
 }:
 
@@ -17,6 +18,7 @@ stdenv.mkDerivation {
   };
 
   doCheck = true;
+  nativeCheckInputs = [ nodejs_22 ];
   checkPhase = "${../scripts/check-package-contents.sh}";
   installPhase = "${../scripts/empty-install.sh}";
 }

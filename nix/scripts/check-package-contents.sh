@@ -36,7 +36,7 @@ require_path "${root}/node_modules/hasown"
 require_path "${root}/node_modules/combined-stream"
 
 public_surface_loader="$(
-  grep -Rsl "function loadBundledPluginPublicArtifactModuleSync" "${root}/dist" | head -1
+  find "${root}/dist" -name "*.js" -type f -exec grep -sl "function loadBundledPluginPublicArtifactModuleSync" {} + | head -1
 )"
 if [ -z "$public_surface_loader" ]; then
   echo "Missing bundled plugin public surface loader" >&2
@@ -46,6 +46,28 @@ if grep -q "rejectHardlinks: true" "$public_surface_loader"; then
   echo "Bundled plugin public surface loader still rejects hardlinked package files" >&2
   exit 1
 fi
+export PUBLIC_SURFACE_LOADER="$public_surface_loader"
+node --input-type=module <<'NODE'
+import { pathToFileURL } from "node:url";
+
+const loaderPath = process.env.PUBLIC_SURFACE_LOADER;
+if (!loaderPath) {
+  throw new Error("PUBLIC_SURFACE_LOADER is not set");
+}
+
+const loader = await import(pathToFileURL(loaderPath).href);
+const loadBundledPluginPublicArtifactModuleSync =
+  loader.loadBundledPluginPublicArtifactModuleSync ?? loader.t;
+
+if (typeof loadBundledPluginPublicArtifactModuleSync !== "function") {
+  throw new Error("Bundled plugin public surface loader export not found");
+}
+
+loadBundledPluginPublicArtifactModuleSync({
+  dirName: "openai",
+  artifactBasename: "provider-policy-api.js",
+});
+NODE
 
 require_js_alias_target() {
   alias="$1"
