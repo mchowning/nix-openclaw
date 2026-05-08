@@ -21,6 +21,8 @@ This repo ships a working Nix package for OpenClaw users, not just a pin mirror.
 - Generated config options come from the upstream core schema.
 - Plugin-owned extension surfaces, such as `channels.<plugin-id>`, must remain accepted by the Home Manager module even when core does not type every plugin key.
 - Runtime tool injection belongs here. If a plugin or battery is enabled, the active OpenClaw harness must see its CLI tools and required environment without asking downstream to expose those tools globally on the user PATH.
+- OpenClaw plugin roots belong here too. The Home Manager module consumes `openclawPlugin.plugins` declarations from plugin flakes and writes `plugins.load.paths`/`plugins.entries` into the generated config.
+- Raw npm/ClawHub plugin names are not batteries-included deployment config. Curated plugins packaged here must be exposed through packages/checks so CI/Garnix caches them. Arbitrary user specs need a deterministic lock/hash-backed Nix builder so Nix reuses the user's store/cache and only rebuilds when the spec, lock, or hash changes.
 
 ## Build Contract
 
@@ -28,6 +30,7 @@ This repo ships a working Nix package for OpenClaw users, not just a pin mirror.
 - No inline scripts or inline file contents in Nix code. Use repo scripts and explicit file paths.
 - Keep runtime tools internal to the `openclaw` wrapper unless they are intentionally part of the public package surface.
 - QMD is the Nix-supported batteries-included local memory backend. Keep `qmd` internal to the `openclaw` wrapper PATH; users opt in with upstream config.
+- ACPX is the first bundled OpenClaw plugin proof. It is consumed from OpenClaw's built `dist-runtime/extensions/acpx` tree, not installed or repaired by npm at runtime.
 - Keep files under 400 lines unless a maintainer explicitly accepts the larger file.
 
 ## Investigations

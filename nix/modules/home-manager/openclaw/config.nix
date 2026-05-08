@@ -117,11 +117,26 @@ let
           inherit key value;
           plugin = "runtime";
         }) (cfg.environment // inst.environment));
-      mergedConfig0 = stripNulls (
-        lib.recursiveUpdate (lib.recursiveUpdate baseConfig (stripNulls cfg.config)) (
-          stripNulls inst.config
-        )
+      userConfig = stripNulls (lib.recursiveUpdate (stripNulls cfg.config) (stripNulls inst.config));
+      pluginEntryConfig = plugins.openclawPluginEntriesConfigFor name;
+      openclawPluginLoadPaths = plugins.openclawPluginLoadPathsFor name;
+      mergedConfigWithoutLoadPaths = stripNulls (
+        lib.recursiveUpdate (lib.recursiveUpdate baseConfig pluginEntryConfig) userConfig
       );
+      existingOpenClawPluginLoadPaths = (
+        ((mergedConfigWithoutLoadPaths.plugins or { }).load or { }).paths or [ ]
+      );
+      mergedConfig0 =
+        if openclawPluginLoadPaths == [ ] then
+          mergedConfigWithoutLoadPaths
+        else
+          lib.recursiveUpdate mergedConfigWithoutLoadPaths {
+            plugins = {
+              load = {
+                paths = lib.unique (openclawPluginLoadPaths ++ existingOpenClawPluginLoadPaths);
+              };
+            };
+          };
       existingWorkspace = (((mergedConfig0.agents or { }).defaults or { }).workspace or null);
       mergedConfig =
         if (cfg.workspace.pinAgentDefaults or true) && existingWorkspace == null then

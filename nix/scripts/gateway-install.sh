@@ -57,7 +57,11 @@ copy_extension_manifests() {
 
 mkdir -p "$out/lib/openclaw" "$out/bin"
 
-log_step "copy build outputs" cp -R dist node_modules package.json "$out/lib/openclaw/"
+set -- dist node_modules package.json
+if [ -d dist-runtime ]; then
+  set -- "$@" dist-runtime
+fi
+log_step "copy build outputs" cp -R "$@" "$out/lib/openclaw/"
 if [ -d extensions ]; then
   log_step "copy extension manifests" copy_extension_manifests
 fi
@@ -151,5 +155,8 @@ if [ -n "${OPENCLAW_BUILD_ROOT_SH:-}" ]; then
 fi
 
 log_step "validate node_modules symlinks" check_no_broken_symlinks "$out/lib/openclaw/node_modules"
+if [ -d "$out/lib/openclaw/dist-runtime" ]; then
+  log_step "validate dist-runtime symlinks" check_no_broken_symlinks "$out/lib/openclaw/dist-runtime"
+fi
 
 log_step "wrap openclaw" bash -e -c '. "$STDENV_SETUP"; makeWrapper "$NODE_BIN" "$out/bin/openclaw" --add-flags "$out/lib/openclaw/dist/index.js" --set-default OPENCLAW_NIX_MODE "1"'

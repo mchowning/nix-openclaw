@@ -33,6 +33,9 @@ let
   betaPluginSource =
     lockedPathFlake "openclaw-test-plugin-beta" ../tests/plugins/beta
       "sha256-lDKtQKHZHqOkOprjLZzBEu8cFJhAdyEzsays9hdVeqE=";
+  runtimePluginSource =
+    lockedPathFlake "openclaw-test-plugin-runtime" ../tests/plugins/runtime
+      "sha256-JquqpIqcXWwwQPXVHsNQEme8xksXBk1A0lXc/pxsnhE=";
 
   stubModule =
     { lib, ... }:
@@ -227,12 +230,64 @@ let
   runtimeProfileCheck =
     builtins.deepSeq (requireNoAssertionFailures "runtime profile" runtimeProfileEval)
       (
-        if
-          lib.hasInfix "openclaw-link-codex-runtime-profiles.sh" runtimeProfileActivation
-        then
+        if lib.hasInfix "openclaw-link-codex-runtime-profiles.sh" runtimeProfileActivation then
           "ok"
         else
           throw "runtimePackages did not wire the Codex runtime profile activation."
+      );
+
+  openclawPluginEval = moduleEval {
+    customPlugins = [
+      { source = runtimePluginSource; }
+    ];
+    config.plugins.load.paths = [
+      "/tmp/user-openclaw-plugin"
+    ];
+  };
+  openclawPluginConfig = builtins.fromJSON (
+    builtins.unsafeDiscardStringContext
+      openclawPluginEval.config.home.file.".openclaw/openclaw.json".text
+  );
+  openclawPluginLoadPaths = ((openclawPluginConfig.plugins or { }).load or { }).paths or [ ];
+  openclawPluginEntry = ((openclawPluginConfig.plugins or { }).entries or { }).runtime-test or { };
+  openclawPluginDisabledEntry =
+    ((openclawPluginConfig.plugins or { }).entries or { }).runtime-disabled or null;
+  openclawPluginCheck =
+    builtins.deepSeq (requireNoAssertionFailures "OpenClaw plugin load" openclawPluginEval)
+      (
+        if !(lib.any (path: lib.hasSuffix "/plugin" path) openclawPluginLoadPaths) then
+          throw "OpenClaw plugin root was not added to plugins.load.paths."
+        else if lib.any (path: lib.hasSuffix "/disabled-plugin" path) openclawPluginLoadPaths then
+          throw "Disabled OpenClaw plugin root was added to plugins.load.paths."
+        else if !(lib.elem "/tmp/user-openclaw-plugin" openclawPluginLoadPaths) then
+          throw "User-defined plugins.load.paths entry was not preserved."
+        else if (openclawPluginEntry.enabled or false) != true then
+          throw "OpenClaw plugin entry default was not enabled."
+        else if openclawPluginDisabledEntry != null then
+          throw "Disabled OpenClaw plugin entry was added to generated config."
+        else
+          "ok"
+      );
+
+  openclawPluginOverrideEval = moduleEval {
+    customPlugins = [
+      { source = runtimePluginSource; }
+    ];
+    config.plugins.entries.runtime-test.enabled = false;
+  };
+  openclawPluginOverrideConfig = builtins.fromJSON (
+    builtins.unsafeDiscardStringContext
+      openclawPluginOverrideEval.config.home.file.".openclaw/openclaw.json".text
+  );
+  openclawPluginOverrideEntry =
+    ((openclawPluginOverrideConfig.plugins or { }).entries or { }).runtime-test or { };
+  openclawPluginOverrideCheck =
+    builtins.deepSeq (requireNoAssertionFailures "OpenClaw plugin override" openclawPluginOverrideEval)
+      (
+        if (openclawPluginOverrideEntry.enabled or null) == false then
+          "ok"
+        else
+          throw "User config could not override OpenClaw plugin enabled default."
       );
 
   checkKey = builtins.deepSeq [
@@ -243,6 +298,8 @@ let
     secretProviderCheck
     qmdPrewarmCheck
     runtimeProfileCheck
+    openclawPluginCheck
+    openclawPluginOverrideCheck
   ] "ok";
 
 in

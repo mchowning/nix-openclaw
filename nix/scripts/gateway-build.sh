@@ -84,6 +84,9 @@ log_step "build: canvas:a2ui:tsc" pnpm exec tsc -p vendor/a2ui/renderers/lit/tsc
 log_step "build: canvas:a2ui:rolldown" node node_modules/rolldown/bin/cli.mjs -c apps/shared/OpenClawKit/Tools/CanvasA2UI/rolldown.config.mjs
 log_step "build: tsdown" pnpm exec tsdown
 log_step "build: runtime-postbuild" node scripts/runtime-postbuild.mjs
+if [ -f "scripts/stage-bundled-plugin-runtime.mjs" ]; then
+  log_step "build: stage bundled plugin runtime" node scripts/stage-bundled-plugin-runtime.mjs
+fi
 log_step "build: plugin-sdk dts" pnpm build:plugin-sdk:dts
 log_step "build: write-plugin-sdk-entry-dts" node --import tsx scripts/write-plugin-sdk-entry-dts.ts
 if [ -f "scripts/copy-plugin-sdk-root-alias.mjs" ]; then

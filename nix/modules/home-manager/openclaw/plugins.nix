@@ -12,8 +12,8 @@ let
   resolvePlugin =
     plugin:
     let
-      flake = builtins.getFlake plugin.source;
       system = pkgs.stdenv.hostPlatform.system;
+      flake = builtins.getFlake plugin.source;
       openclawPluginRaw =
         if flake ? openclawPlugin then
           flake.openclawPlugin
@@ -26,13 +26,27 @@ let
           throw "openclawPlugin is null in ${plugin.source} for ${system}"
         else
           openclawPlugin;
+      name = resolvedPlugin.name or (throw "openclawPlugin.name missing in ${plugin.source}");
       needs = resolvedPlugin.needs or { };
+      normalizeOpenClawPlugin =
+        entry:
+        let
+          id = entry.id or (throw "openclawPlugin ${name}: plugins entry missing id");
+          path = entry.path or (throw "openclawPlugin ${name}: plugins.${id} missing path");
+        in
+        {
+          inherit id path;
+          enable = entry.enable or true;
+          source = plugin.source;
+          plugin = name;
+        };
     in
     {
       source = plugin.source;
-      name = resolvedPlugin.name or (throw "openclawPlugin.name missing in ${plugin.source}");
+      inherit name;
       skills = resolvedPlugin.skills or [ ];
       packages = resolvedPlugin.packages or [ ];
+      plugins = map normalizeOpenClawPlugin (resolvedPlugin.plugins or [ ]);
       needs = {
         stateDirs = needs.stateDirs or [ ];
         requiredEnv = needs.requiredEnv or [ ];
@@ -104,31 +118,72 @@ let
     in
     lib.flatten (map toPairs entries);
 
-  pluginAssertions = lib.flatten (
-    lib.mapAttrsToList (
-      instName: inst:
-      let
-        plugins = resolvedPluginsByInstance.${instName} or [ ];
-        envFor = p: (p.config.env or { });
-        missingFor = p: lib.filter (req: !(builtins.hasAttr req (envFor p))) p.needs.requiredEnv;
-        configMissingStateDir = p: (p.config.settings or { }) != { } && (p.needs.stateDirs or [ ]) == [ ];
-        mkAssertion =
-          p:
-          let
-            missing = missingFor p;
-          in
-          {
-            assertion = missing == [ ];
-            message = "programs.openclaw.instances.${instName}: plugin ${p.name} missing required env: ${lib.concatStringsSep ", " missing}";
+  openclawPluginsFor =
+    instName: lib.flatten (map (p: p.plugins) (resolvedPluginsByInstance.${instName} or [ ]));
+
+  enabledOpenClawPluginsFor = instName: lib.filter (p: p.enable) (openclawPluginsFor instName);
+
+  openclawPluginLoadPathsFor =
+    instName: map (p: toString p.path) (enabledOpenClawPluginsFor instName);
+
+  openclawPluginEntriesConfigFor =
+    instName:
+    let
+      entries = enabledOpenClawPluginsFor instName;
+    in
+    lib.optionalAttrs (entries != [ ]) {
+      plugins = {
+        entries = lib.listToAttrs (
+          map (p: {
+            name = p.id;
+            value = {
+              enabled = true;
+            };
+          }) entries
+        );
+      };
+    };
+
+  openclawPluginIdAssertions = lib.mapAttrsToList (
+    instName: _inst:
+    let
+      ids = map (p: p.id) (enabledOpenClawPluginsFor instName);
+      counts = lib.foldl' (acc: id: acc // { "${id}" = (acc.${id} or 0) + 1; }) { } ids;
+      duplicates = lib.attrNames (lib.filterAttrs (_: v: v > 1) counts);
+    in
+    {
+      assertion = duplicates == [ ];
+      message = "programs.openclaw.instances.${instName}: duplicate OpenClaw plugin ids detected: ${lib.concatStringsSep ", " duplicates}";
+    }
+  ) enabledInstances;
+
+  pluginAssertions =
+    openclawPluginIdAssertions
+    ++ lib.flatten (
+      lib.mapAttrsToList (
+        instName: inst:
+        let
+          plugins = resolvedPluginsByInstance.${instName} or [ ];
+          envFor = p: (p.config.env or { });
+          missingFor = p: lib.filter (req: !(builtins.hasAttr req (envFor p))) p.needs.requiredEnv;
+          configMissingStateDir = p: (p.config.settings or { }) != { } && (p.needs.stateDirs or [ ]) == [ ];
+          mkAssertion =
+            p:
+            let
+              missing = missingFor p;
+            in
+            {
+              assertion = missing == [ ];
+              message = "programs.openclaw.instances.${instName}: plugin ${p.name} missing required env: ${lib.concatStringsSep ", " missing}";
+            };
+          mkConfigAssertion = p: {
+            assertion = !(configMissingStateDir p);
+            message = "programs.openclaw.instances.${instName}: plugin ${p.name} provides settings but declares no stateDirs (needed for config.json).";
           };
-        mkConfigAssertion = p: {
-          assertion = !(configMissingStateDir p);
-          message = "programs.openclaw.instances.${instName}: plugin ${p.name} provides settings but declares no stateDirs (needed for config.json).";
-        };
-      in
-      (map mkAssertion plugins) ++ (map mkConfigAssertion plugins)
-    ) enabledInstances
-  );
+        in
+        (map mkAssertion plugins) ++ (map mkConfigAssertion plugins)
+      ) enabledInstances
+    );
 
   pluginConfigFiles =
     let
@@ -192,6 +247,9 @@ in
     pluginStateDirsAll
     pluginEnvFor
     pluginEnvAllFor
+    openclawPluginsFor
+    openclawPluginLoadPathsFor
+    openclawPluginEntriesConfigFor
     pluginAssertions
     pluginConfigFiles
     pluginGuards

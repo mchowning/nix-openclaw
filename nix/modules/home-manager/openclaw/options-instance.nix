@@ -83,7 +83,7 @@
           options = {
             source = lib.mkOption {
               type = lib.types.str;
-              description = "Plugin source pointer (e.g., github:owner/repo or path:/...).";
+              description = "Plugin flake source pointer (e.g., github:owner/repo or path:/...).";
             };
             config = lib.mkOption {
               type = lib.types.attrs;
