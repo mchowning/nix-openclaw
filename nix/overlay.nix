@@ -1,7 +1,24 @@
+{
+  openclawToolPkgs ? { },
+  qmdPkgs ? { },
+}:
 final: prev:
 let
-  packages = import ./packages { pkgs = prev; };
-  toolNames = (import ./tools/extended.nix { pkgs = prev; }).toolNames;
+  qmdPackage =
+    if prev.stdenv.hostPlatform.isDarwin then
+      openclawToolPkgs.qmd or null
+    else
+      qmdPkgs.qmd or qmdPkgs.default or null;
+  packages = import ./packages {
+    pkgs = prev;
+    openclawToolPkgs = openclawToolPkgs;
+    inherit qmdPackage;
+  };
+  toolNames =
+    (import ./tools/extended.nix {
+      pkgs = prev;
+      openclawToolPkgs = openclawToolPkgs;
+    }).toolNames;
   withTools =
     {
       toolNamesOverride ? null,
@@ -9,6 +26,8 @@ let
     }:
     import ./packages {
       pkgs = prev;
+      openclawToolPkgs = openclawToolPkgs;
+      inherit qmdPackage;
       inherit toolNamesOverride excludeToolNames;
     };
 in

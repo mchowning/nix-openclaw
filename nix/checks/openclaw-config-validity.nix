@@ -73,20 +73,17 @@ let
               enable = true;
               launchd.enable = false;
               systemd.enable = false;
-              instances.default = { };
-              config = {
-                gateway = {
-                  bind = "tailnet";
-                  auth = {
-                    mode = "token";
-                    token = "test-token";
-                  };
-                  reload = {
-                    mode = "hot";
-                    debounceMs = 500;
+              instances.default = {
+                workspaceDir = expectedWorkspace;
+                config = {
+                  channels.telegram = {
+                    enabled = true;
+                    botToken = "123456:test-token";
+                    dmPolicy = "open";
+                    groupPolicy = "disabled";
+                    allowFrom = [ "*" ];
                   };
                 };
-                discovery.mdns.mode = "minimal";
               };
             };
           };
@@ -99,6 +96,7 @@ let
   configPathKey = ".openclaw/openclaw.json";
   configJson = moduleEval.config.home.file."${configPathKey}".text;
   configFile = pkgs.writeText "openclaw-config.json" configJson;
+  expectedWorkspace = "/tmp/openclaw-explicit-workspace";
 
 in
 stdenv.mkDerivation {
@@ -113,7 +111,8 @@ stdenv.mkDerivation {
 
   env = {
     OPENCLAW_CONFIG_PATH = configFile;
-    OPENCLAW_SRC = "${openclawGateway}/lib/openclaw";
+    OPENCLAW_GATEWAY = openclawGateway;
+    OPENCLAW_EXPECTED_WORKSPACE = expectedWorkspace;
   };
 
   doCheck = true;

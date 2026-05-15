@@ -1,24 +1,46 @@
 {
   lib,
-  buildEnv,
+  stdenvNoCC,
+  makeWrapper,
+  python3Minimal,
   openclaw-gateway,
   openclaw-app ? null,
   extendedTools ? [ ],
+  qmdPackage ? null,
+  version ? null,
 }:
 
 let
-  appPaths = lib.optional (openclaw-app != null) openclaw-app;
-  appLinks = lib.optional (openclaw-app != null) "/Applications";
+  bundleVersion =
+    if version != null && version != "" then version else lib.getVersion openclaw-gateway;
+  runtimeTools = extendedTools ++ lib.optional (qmdPackage != null) qmdPackage;
+  toolsPath = lib.makeBinPath runtimeTools;
 in
-buildEnv {
-  name = "openclaw-2.0.0-beta5";
-  paths = [ openclaw-gateway ] ++ appPaths ++ extendedTools;
-  pathsToLink = [ "/bin" ] ++ appLinks;
+stdenvNoCC.mkDerivation {
+  pname = "openclaw";
+  version = bundleVersion;
+
+  dontUnpack = true;
+  dontConfigure = true;
+  dontBuild = true;
+
+  nativeBuildInputs = [ makeWrapper ];
+
+  env = {
+    OPENCLAW_APP_PACKAGE = lib.optionalString (openclaw-app != null) "${openclaw-app}";
+    OPENCLAW_GATEWAY_BIN = "${openclaw-gateway}/bin/openclaw";
+    OPENCLAW_PINNED_WRITE_PYTHON = "${python3Minimal}/bin/python3";
+    OPENCLAW_TOOLS_PATH = toolsPath;
+    STDENV_SETUP = "${stdenvNoCC}/setup";
+  };
+
+  installPhase = "${../scripts/openclaw-batteries-install.sh}";
 
   meta = with lib; {
     description = "OpenClaw batteries-included bundle (gateway + app + tools)";
     homepage = "https://github.com/openclaw/openclaw";
     license = licenses.mit;
     platforms = platforms.darwin ++ platforms.linux;
+    mainProgram = "openclaw";
   };
 }

@@ -14,25 +14,27 @@ let
     excludeToolNames = effectiveExcludeTools;
   };
   toolOverridesEnabled = cfg.toolNames != null || effectiveExcludeTools != [ ];
+  overlayPackage = pkgs.openclaw or null;
   toolSets = import ../../../tools/extended.nix ({ inherit pkgs; } // toolOverrides);
   defaultPackage =
-    if toolOverridesEnabled && cfg.package == pkgs.openclaw then
+    if toolOverridesEnabled && overlayPackage != null && cfg.package == overlayPackage then
       (pkgs.openclawPackages.withTools toolOverrides).openclaw
     else
       cfg.package;
   appPackage = if cfg.appPackage != null then cfg.appPackage else defaultPackage;
+  qmdPackage = pkgs.openclawPackages.qmd or null;
   generatedConfigOptions = import ../../../generated/openclaw-config-options.nix { lib = lib; };
   pluginCatalog = import ./plugin-catalog.nix;
 
   bundledPluginSources =
     let
-      stepieteRev = "c110209720cbc6c87fccb6c1e1c2b79b1d719245";
-      stepieteNarHash = "sha256-1Vo7rcLGdKaqj39J3HhBKh8IbljSjgCUhinCFJbDPl8=";
-      stepiete =
+      openclawToolsRev = "4c1cee3c7eaf68f9de0f756be1484534f5bb5f34";
+      openclawToolsNarHash = "sha256-tXWkN1VnwFG8XlRqW/e7VwbKnUfyU9tB7YDm9QHJXTY=";
+      openclawTools =
         tool:
-        "github:openclaw/nix-steipete-tools?dir=tools/${tool}&rev=${stepieteRev}&narHash=${stepieteNarHash}";
+        "github:openclaw/nix-openclaw-tools?dir=tools/${tool}&rev=${openclawToolsRev}&narHash=${openclawToolsNarHash}";
     in
-    lib.mapAttrs (_name: plugin: plugin.source or (stepiete plugin.tool)) pluginCatalog;
+    lib.mapAttrs (_name: plugin: plugin.source or (openclawTools plugin.tool)) pluginCatalog;
 
   bundledPlugins = lib.filter (p: p != null) (
     lib.mapAttrsToList (
@@ -66,6 +68,7 @@ in
     toolSets
     defaultPackage
     appPackage
+    qmdPackage
     generatedConfigOptions
     bundledPluginSources
     bundledPlugins

@@ -1,0 +1,26 @@
+diff --git a/src/gateway/server-startup-config.ts b/src/gateway/server-startup-config.ts
+index e3f1565a00..97feaf2e8c 100644
+--- a/src/gateway/server-startup-config.ts
++++ b/src/gateway/server-startup-config.ts
+@@ -99,6 +99,21 @@ export async function loadGatewayStartupConfigSnapshot(params: {
+     };
+   }
+ 
++  if (isNixMode) {
++    params.log.info(
++      `gateway: auto-enabled plugins for this runtime without writing config in Nix mode:\n${autoEnable.changes.map((entry) => `- ${entry}`).join("\n")}`,
++    );
++    return {
++      snapshot: {
++        ...configSnapshot,
++        runtimeConfig: autoEnable.config,
++        config: autoEnable.config,
++      },
++      wroteConfig,
++      ...(pluginMetadataSnapshot ? { pluginMetadataSnapshot } : {}),
++    };
++  }
++
+   try {
+     const { replaceConfigFile } = await import("../config/mutate.js");
+     await replaceConfigFile({

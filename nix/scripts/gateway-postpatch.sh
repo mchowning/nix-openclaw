@@ -4,9 +4,63 @@ if [ -f package.json ]; then
   "$REMOVE_PACKAGE_MANAGER_FIELD_SH" package.json
 fi
 
+if [ -f pnpm-lock.yaml ]; then
+  "$PATCH_PNPM_10_LOCK_SH" pnpm-lock.yaml
+fi
+
 if [ -n "${PATCH_BUNDLED_RUNTIME_DEPS_SCRIPT:-}" ] && [ -f scripts/stage-bundled-plugin-runtime-deps.mjs ]; then
   cp "$PATCH_BUNDLED_RUNTIME_DEPS_SCRIPT" scripts/stage-bundled-plugin-runtime-deps.mjs
   chmod u+w scripts/stage-bundled-plugin-runtime-deps.mjs
+fi
+
+if [ -n "${PATCH_PUBLIC_SURFACE_HARDLINKS:-}" ]; then
+  patch -p1 < "$PATCH_PUBLIC_SURFACE_HARDLINKS"
+fi
+
+if [ -n "${PATCH_SKIP_PLUGIN_AUTO_ENABLE_NIX_MODE:-}" ]; then
+  patch -p1 < "$PATCH_SKIP_PLUGIN_AUTO_ENABLE_NIX_MODE"
+fi
+
+if [ -f scripts/tsdown-build.mjs ] && ! grep -q "node_modules/tsdown/dist/run.mjs" scripts/tsdown-build.mjs; then
+  python3 - <<'PY'
+from pathlib import Path
+path = Path("scripts/tsdown-build.mjs")
+text = path.read_text()
+old = '''  const runner = resolvePnpmRunner({
+    pnpmArgs: [
+      "exec",
+      "tsdown",
+      "--config-loader",
+      "unrun",
+      "--logLevel",
+      logLevel,
+      "--no-clean",
+      ...extraArgs,
+    ],
+    nodeExecPath: params.nodeExecPath ?? process.execPath,
+    npmExecPath: params.npmExecPath ?? env.npm_execpath,
+    comSpec: params.comSpec ?? env.ComSpec,
+    platform: params.platform ?? process.platform,
+  });
+'''
+new = '''  const runner = {
+    command: params.nodeExecPath ?? process.execPath,
+    args: [
+      "node_modules/tsdown/dist/run.mjs",
+      "--config-loader",
+      "unrun",
+      "--logLevel",
+      logLevel,
+      "--no-clean",
+      ...extraArgs,
+    ],
+    shell: false,
+  };
+'''
+if old not in text:
+    raise SystemExit("tsdown runner block not found")
+path.write_text(text.replace(old, new, 1))
+PY
 fi
 
 if [ -f src/logging/logger.ts ]; then

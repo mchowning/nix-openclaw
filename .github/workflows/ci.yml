@@ -12,10 +12,11 @@ concurrency:
 
 jobs:
   linux:
-    runs-on: blacksmith-16vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Verify flake.lock owners
         run: scripts/check-flake-lock-owners.sh
@@ -24,25 +25,28 @@ jobs:
         uses: cachix/install-nix-action@v31
 
       - name: Run Linux CI aggregator
-        run: nix build .#checks.x86_64-linux.ci --accept-flake-config
+        run: timeout --foreground 50m nix build .#checks.x86_64-linux.ci --accept-flake-config
 
-      - name: Dump failing gateway test log
+      - name: Dump failing source check log
         if: failure()
         run: |
-          drv="$(nix eval --raw .#checks.x86_64-linux.gateway-tests.drvPath --accept-flake-config)"
+          drv="$(nix eval --raw .#checks.x86_64-linux.source-checks.drvPath --accept-flake-config)"
           nix log "$drv" | tail -n 400 || true
 
   macos:
     runs-on: macos-14
+    timeout-minutes: 40
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v13
+        uses: DeterminateSystems/nix-installer-action@v22
 
       - name: Build Darwin CI aggregator
+        timeout-minutes: 25
         run: nix build .#checks.aarch64-darwin.ci --accept-flake-config
 
       - name: Run HM activation
+        timeout-minutes: 10
         run: scripts/hm-activation-macos.sh

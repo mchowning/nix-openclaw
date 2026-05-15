@@ -43,7 +43,7 @@ export NPM_CONFIG_STORE_DIR="$store_path"
 export NPM_CONFIG_STORE_PATH="$store_path"
 export HOME="$(mktemp -d)"
 
-log_step "pnpm install (offline, frozen, ignore-scripts)" pnpm install --offline --frozen-lockfile --ignore-scripts --store-dir "$store_path"
+log_step "pnpm install (offline, frozen, ignore-scripts)" pnpm install --offline --frozen-lockfile --ignore-scripts --prod=false --store-dir "$store_path"
 
 log_step "chmod node_modules writable" chmod -R u+w node_modules
 
@@ -62,39 +62,62 @@ if [ -n "$rebuild_list" ]; then
     ELECTRON_SKIP_BINARY_DOWNLOAD=1 \
     pnpm rebuild $rebuild_list
 else
-  log_step "pnpm rebuild (all)" env \
-    NODE_LLAMA_CPP_SKIP_DOWNLOAD=1 \
-    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    PUPPETEER_SKIP_DOWNLOAD=1 \
-    ELECTRON_SKIP_BINARY_DOWNLOAD=1 \
-    pnpm rebuild
+  echo ">> [timing] pnpm rebuild: skipped (no pnpm.onlyBuiltDependencies configured)"
 fi
 
 log_step "patchShebangs node_modules/.bin" bash -e -c ". \"$STDENV_SETUP\"; patchShebangs node_modules/.bin"
+
+# Git tarball dependencies do not get their npm prepack output in offline Nix
+# builds. OpenClaw currently depends on @openclaw/fs-safe this way.
+if [ -n "${OPENCLAW_FS_SAFE_SOURCE:-}" ] && [ ! -d "node_modules/@openclaw/fs-safe/dist" ]; then
+  rm -rf node_modules/@openclaw/fs-safe
+  mkdir -p node_modules/@openclaw
+  cp -R "$OPENCLAW_FS_SAFE_SOURCE" node_modules/@openclaw/fs-safe
+  chmod -R u+w node_modules/@openclaw/fs-safe
+  log_step "build dependency: @openclaw/fs-safe" pnpm exec tsc -p node_modules/@openclaw/fs-safe/tsconfig.json
+fi
 
 # Ensure rolldown is found from workspace bins in offline/sandbox builds.
 if [ -d "node_modules/.pnpm/node_modules/.bin" ]; then
   export PATH="$PWD/node_modules/.pnpm/node_modules/.bin:$PATH"
 fi
 
-# Break down `pnpm build` (upstream package.json) so we can profile it.
-# Upstream's bundle-a2ui script shells back out through pnpm-runner.
-# In Nix builds that nested spawn can fail silently, so run the same steps directly.
-log_step "build: canvas:a2ui:tsc" pnpm exec tsc -p vendor/a2ui/renderers/lit/tsconfig.json
-log_step "build: canvas:a2ui:rolldown" node node_modules/rolldown/bin/cli.mjs -c apps/shared/OpenClawKit/Tools/CanvasA2UI/rolldown.config.mjs
-log_step "build: tsdown" pnpm exec tsdown
-log_step "build: plugin-sdk dts" pnpm build:plugin-sdk:dts
-log_step "build: write-plugin-sdk-entry-dts" node --import tsx scripts/write-plugin-sdk-entry-dts.ts
-if [ -f "scripts/copy-plugin-sdk-root-alias.mjs" ]; then
-  log_step "build: copy-plugin-sdk-root-alias" node scripts/copy-plugin-sdk-root-alias.mjs
+# Prefer the upstream release build orchestration when available; it tracks
+# release-specific build steps such as tsdown-build, build stamps, bundled
+# plugin assets, and generated runtime metadata.
+if jq -e '.scripts["build:docker"]' package.json >/dev/null; then
+  log_step "build:docker" pnpm build:docker
+else
+  # Older OpenClaw releases predate build:docker.
+  if [ -f "scripts/bundled-plugin-assets.mjs" ]; then
+    log_step "build: plugins:assets:build" node scripts/bundled-plugin-assets.mjs --phase build
+  else
+    log_step "build: canvas:a2ui:bundle" node scripts/bundle-a2ui.mjs
+  fi
+  log_step "build: tsdown" pnpm exec tsdown
+  log_step "build: runtime-postbuild" node scripts/runtime-postbuild.mjs
+  if [ -f "scripts/stage-bundled-plugin-runtime.mjs" ]; then
+    log_step "build: stage bundled plugin runtime" node scripts/stage-bundled-plugin-runtime.mjs
+  fi
+  log_step "build: plugin-sdk dts" pnpm build:plugin-sdk:dts
+  log_step "build: write-plugin-sdk-entry-dts" node --import tsx scripts/write-plugin-sdk-entry-dts.ts
+  if [ -f "scripts/copy-plugin-sdk-root-alias.mjs" ]; then
+    log_step "build: copy-plugin-sdk-root-alias" node scripts/copy-plugin-sdk-root-alias.mjs
+  fi
+  if [ -f "scripts/copy-bundled-plugin-metadata.mjs" ]; then
+    log_step "build: copy-bundled-plugin-metadata" node scripts/copy-bundled-plugin-metadata.mjs
+  fi
+  if [ -f "scripts/bundled-plugin-assets.mjs" ]; then
+    log_step "build: plugins:assets:copy" node scripts/bundled-plugin-assets.mjs --phase copy
+  else
+    log_step "build: canvas-a2ui-copy" node --import tsx scripts/canvas-a2ui-copy.ts
+  fi
+  log_step "build: copy-hook-metadata" node --import tsx scripts/copy-hook-metadata.ts
+  log_step "build: write-build-info" node --import tsx scripts/write-build-info.ts
+  log_step "build: write-cli-compat" node --import tsx scripts/write-cli-compat.ts
 fi
-if [ -f "scripts/copy-bundled-plugin-metadata.mjs" ]; then
-  log_step "build: copy-bundled-plugin-metadata" node scripts/copy-bundled-plugin-metadata.mjs
-fi
-log_step "build: canvas-a2ui-copy" node --import tsx scripts/canvas-a2ui-copy.ts
-log_step "build: copy-hook-metadata" node --import tsx scripts/copy-hook-metadata.ts
-log_step "build: write-build-info" node --import tsx scripts/write-build-info.ts
-log_step "build: write-cli-compat" node --import tsx scripts/write-cli-compat.ts
+
+log_step "patchShebangs node_modules for generated bins" bash -e -c ". \"$STDENV_SETUP\"; patchShebangs node_modules/.bin node_modules/*/bin node_modules/.pnpm/*/node_modules/*/bin 2>/dev/null || true"
 
 log_step "ui:build" pnpm ui:build
 

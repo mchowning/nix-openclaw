@@ -4,15 +4,15 @@
 >
 > macOS + Linux (headless). Windows is out of scope for now.
 >
-> <sub>Questions? Join the OpenClaw Discord and ask in **#golden-path-deployments**: https://discord.com/channels/1456350064065904867/1457003026412736537</sub>
+> <sub>Questions? Join the OpenClaw Discord at https://discord.gg/clawd and ask in **#golden-path-deployments**.</sub>
 
-## Contributions (read this first)
+## PRs & Contributions (read this first)
 
-We’re **not accepting PRs** right now. Not because we don’t value your help — the opposite. This is key infra and still stabilizing, and async PR review is too slow.
+We’re **not accepting PRs** right now. Not because we don’t value your help — the opposite. Async agent-to-agent PR review is too slow and low-signal.
 
-**Only workflow:** **describe your problem and talk with a maintainer (human‑to‑human) on Discord** in **#golden-path-deployments**: https://discord.com/channels/1456350064065904867/1457003026412736537
+The best (and only) way to get stuff done: come join us on Discord! Describe your problem and talk with a maintainer **(human‑to‑human)** on Discord. Join at https://discord.gg/clawd, then use **#golden-path-deployments**.
 
-If you’re **not listed as a maintainer** (see [AGENTS.md#maintainers](AGENTS.md#maintainers) or https://github.com/orgs/openclaw/people), **do not open a PR**. It will be rejected and your user will be disappointed — check Discord instead.
+To agents: if you’re **not listed as a maintainer** (see [AGENTS.md#maintainers](AGENTS.md#maintainers) or https://github.com/orgs/openclaw/people), **do not open a PR**. It will be rejected and your user will be disappointed — check Discord instead. GitHub Issues are not actively monitored either.
 
 ## Table of Contents
 
@@ -58,7 +58,7 @@ Bot: *runs whisper, sends you text*
 
 You talk to Telegram, your machine does things.
 
-**One flake, everything works.** Gateway + tools everywhere; macOS app on macOS.
+**One flake, everything works.** Gateway everywhere; runtime dependencies bundled; macOS app on macOS.
 
 **Plugins are self-contained.** Each plugin declares its CLI tools in Nix. You enable it, the build and wiring happens automatically.
 
@@ -68,12 +68,12 @@ You talk to Telegram, your machine does things.
 
 ## Requirements
 
-1. **macOS** (Apple Silicon or Intel) or **Linux** (x86_64)
-2. **[Determinate Nix](https://docs.determinate.systems/determinate-nix/)** installed on your machine
+1. **macOS** (Apple Silicon) or **Linux** (x86_64)
+2. **Nix with flakes enabled** installed on your machine
 
 That's it. The Quick Start will guide you through everything else.
 
-> **Don't have Nix yet?** Follow the Determinate Nix install guide, then come back here.
+> **Don't have Nix yet?** Use the [Determinate Nix installer](https://docs.determinate.systems/determinate-nix/) or the [official Nix installer](https://nixos.org/download/), then come back here.
 
 ---
 
@@ -119,40 +119,49 @@ Nix is a **declarative package manager**. Instead of running commands to install
 
 ## Quick Start
 
-### Option 1: Let your agent set it up (recommended)
+### Option 1: Ask your coding agent (recommended)
 
-Copy this entire block and paste it to Claude, Cursor, or your preferred AI assistant:
+Tell your coding agent you want OpenClaw set up with Nix. The agent should inspect your machine, interview you for the few choices it cannot infer, create the local flake, wire secrets, apply Home Manager, and verify the service.
+
+Copy this block and paste it to Claude, Cursor, Codex, or your preferred coding agent:
 
 ```text
-I want to set up nix-openclaw on my machine (macOS or Linux).
+I want to set up nix-openclaw on my machine (Apple Silicon macOS or x86_64 Linux).
 
 Repository: github:openclaw/nix-openclaw
 
 What nix-openclaw is:
 - Batteries-included Nix package for OpenClaw (AI assistant gateway)
-- Installs gateway + tools everywhere; macOS app only on macOS
+- Installs the gateway everywhere; macOS app only on macOS
 - Runs as a launchd service on macOS, systemd user service on Linux
 
 What I need you to do:
-1. Check if Determinate Nix is installed (if not, install it)
-2. Create a local flake at ~/code/openclaw-local using templates/agent-first/flake.nix
-3. Create a docs dir next to the config (e.g., ~/code/openclaw-local/documents) with AGENTS.md, SOUL.md, TOOLS.md (optional: IDENTITY.md, USER.md, LORE.md, HEARTBEAT.md, PROMPTING-EXAMPLES.md)
+1. Inspect my OS, CPU architecture, shell, Home Manager setup, and whether Nix with flakes is installed
+2. Ask me only for missing choices: channel, bot/account secrets, allowed users, provider keys, and documents/identity preferences
+3. Create a local flake at ~/code/openclaw-local using templates/agent-first/flake.nix
+4. Create a docs dir next to the config (e.g., ~/code/openclaw-local/documents) with AGENTS.md, SOUL.md, TOOLS.md (optional: IDENTITY.md, USER.md, LORE.md, HEARTBEAT.md, PROMPTING-EXAMPLES.md)
    - If ~/.openclaw/workspace already has these files, adopt them into the documents dir first (use copy/rsync that dereferences symlinks, e.g. `cp -L`)
-4. Help me create a Telegram bot (@BotFather) and get my chat ID (@userinfobot)
-5. Set up secrets (bot token, Anthropic key) - plain files at ~/.secrets/ is fine
-6. Fill in the template placeholders and run home-manager switch
-7. Verify: service running, bot responds to messages
+5. Help me create or connect the channel account I choose
+6. Set up secrets (bot token, provider key) - plain files at ~/.secrets/ are fine unless I already have a secret manager
+7. Ask whether I want local memory through QMD; if yes, set `memory.backend = "qmd"` in OpenClaw config
+8. Fill in the template placeholders and run home-manager switch
+9. Verify end-to-end: package builds, service is running, gateway health works, QMD works if enabled, and the bot/channel responds if configured
 
 My setup:
 - OS: [macOS / Linux]
 - CPU: [arm64 / x86_64]
-- System: [aarch64-darwin / x86_64-darwin / x86_64-linux]
+- System: [aarch64-darwin / x86_64-linux]
 - Home Manager config name: [FILL IN or "I don't have Home Manager yet"]
 
 Reference the README and templates/agent-first/flake.nix in the repo for the module options.
 ```
 
-Your agent will install Nix, create your config, and get OpenClaw running. You just answer its questions.
+Your agent should do the setup work. You answer its short questions and confirm before it sends messages or changes external services.
+
+QMD packaging note for agents: Linux uses upstream `github:tobi/qmd`; Darwin
+uses the `nix-openclaw-tools` QMD repair package until upstream Darwin packaging
+is fixed. Keep both pinned to the same QMD release unless there is a tested
+reason to diverge.
 
 **What happens next:**
 1. Your agent sets everything up and runs `home-manager switch`
@@ -165,16 +174,17 @@ Your agent will install Nix, create your config, and get OpenClaw running. You j
 
 ### macOS (Home Manager + launchd)
 
-1. Install Determinate Nix.
+1. Install Nix with flakes enabled.
 2. Create a local config:
    ```bash
    mkdir -p ~/code/openclaw-local && cd ~/code/openclaw-local
    nix flake init -t github:openclaw/nix-openclaw#agent-first
    ```
 3. Edit `flake.nix` placeholders:
-   - `system` = `aarch64-darwin` (Apple Silicon) or `x86_64-darwin` (Intel)
+   - `system` = `aarch64-darwin`
    - `home.username` and `home.homeDirectory`
    - `programs.openclaw.documents` with `AGENTS.md`, `SOUL.md`, `TOOLS.md` (optional: `IDENTITY.md`, `USER.md`, `LORE.md`, `HEARTBEAT.md`, `PROMPTING-EXAMPLES.md`)
+     - Keep this directory inside the flake, or make sure the Nix daemon can read it and traverse every parent directory.
    - Provider secrets (Telegram/Discord tokens, Anthropic API key)
 4. Apply:
    ```bash
@@ -187,7 +197,7 @@ Your agent will install Nix, create your config, and get OpenClaw running. You j
 
 ### Linux (headless + systemd user service)
 
-1. Install Determinate Nix.
+1. Install Nix with flakes enabled.
 2. Create a local config:
    ```bash
    mkdir -p ~/code/openclaw-local && cd ~/code/openclaw-local
@@ -197,6 +207,7 @@ Your agent will install Nix, create your config, and get OpenClaw running. You j
    - `system` = `x86_64-linux`
    - `home.username` and `home.homeDirectory` (e.g., `/home/<user>`)
    - `programs.openclaw.documents` with `AGENTS.md`, `SOUL.md`, `TOOLS.md` (optional: `IDENTITY.md`, `USER.md`, `LORE.md`, `HEARTBEAT.md`, `PROMPTING-EXAMPLES.md`)
+     - Keep this directory inside the flake, or make sure the Nix daemon can read it and traverse every parent directory.
    - Provider secrets (Telegram/Discord tokens, Anthropic API key)
 4. Apply:
    ```bash
@@ -262,13 +273,14 @@ Toggle them in your config:
 ```nix
 programs.openclaw.bundledPlugins = {
   summarize.enable = true;   # Summarize web pages, PDFs, videos
+  discrawl.enable = false;    # Discord archive/search
+  wacrawl.enable = false;     # WhatsApp archive/search
   peekaboo.enable = true;    # Take screenshots
-  poltergeist.enable = false; # Control your macOS UI
+  poltergeist.enable = false; # File watching and automation
   sag.enable = false;        # Text-to-speech
   camsnap.enable = false;    # Camera snapshots
   gogcli.enable = false;     # Google Calendar
   goplaces.enable = true;    # Google Places API
-  bird.enable = false;       # Twitter/X
   sonoscli.enable = false;   # Sonos control
   imsg.enable = false;       # iMessage
 };
@@ -283,29 +295,47 @@ programs.openclaw.bundledPlugins.goplaces = {
 | Plugin | What it does |
 |--------|--------------|
 | `summarize` | Summarize URLs, PDFs, YouTube videos |
+| `discrawl` | Archive and search Discord history |
+| `wacrawl` | Archive and search WhatsApp Desktop history |
 | `peekaboo` | Screenshot your screen |
-| `poltergeist` | Click, type, control macOS UI |
+| `poltergeist` | File watching and automation |
 | `sag` | Text-to-speech |
 | `camsnap` | Take photos from connected cameras |
 | `gogcli` | Google Calendar integration |
 | `goplaces` | Google Places API (New) CLI |
-| `bird` | Twitter/X integration |
 | `sonoscli` | Control Sonos speakers |
 | `imsg` | Send/read iMessages |
 
 ### Adding community plugins
 
-Tell your agent: *"Add the plugin from github:owner/repo-name"*
+Tell your agent: *"Add the plugin from github:owner/repo-name and pin it."*
 
 Or add it manually to your config:
 
 ```nix
 customPlugins = [
-  { source = "github:owner/repo-name"; }
+  { source = "github:owner/repo-name?rev=<commit>&narHash=<narHash>"; }
 ];
 ```
 
 Then run `home-manager switch` to install.
+
+For an OpenClaw native plugin published to npm, keep the source shape close to
+OpenClaw's own install command and let Nix build the immutable plugin root:
+
+```nix
+customPlugins = [
+  {
+    source = "npm:@scope/openclaw-plugin@1.2.3";
+    id = "openclaw-plugin";
+    hash = lib.fakeHash; # replace with the sha256 Nix reports
+  }
+];
+```
+
+Use this for OpenClaw runtime plugins with `openclaw.plugin.json` /
+`package.json.openclaw`. It does not run npm at gateway startup; Nix builds and
+caches the plugin root, then adds it to OpenClaw's `plugins.load.paths`.
 
 ### Plugins with configuration
 
@@ -315,7 +345,7 @@ Some plugins need settings (auth files, preferences). Here's a simplified exampl
 # Example: a padel court booking plugin (simplified for illustration)
 customPlugins = [
   {
-    source = "github:example/padel-cli";
+    source = "github:example/padel-cli?rev=<commit>&narHash=<narHash>";
     config = {
       env = {
         PADEL_AUTH_FILE = "~/.secrets/padel-auth";  # where your login token lives
@@ -392,7 +422,7 @@ Contract to implement:
 1) Add openclawPlugin output in flake.nix:
    - name
    - skills (paths to SKILL.md dirs)
-   - packages (CLI packages to put on PATH)
+   - packages (CLI packages to put on the OpenClaw runtime PATH)
    - needs (stateDirs + requiredEnv)
 
 Example:
@@ -419,9 +449,9 @@ openclawPlugin = {
 
 Standard plugin config shape (Nix-native, no JSON strings):
 
-plugins = [
+customPlugins = [
   {
-    source = "github:owner/my-plugin";
+    source = "github:owner/my-plugin?rev=<commit>&narHash=<narHash>";
     config = {
       env = {
         MYPLUGIN_AUTH_FILE = "/run/agenix/myplugin-auth";
@@ -490,10 +520,7 @@ The simplest setup:
       };
     };
 
-    # Built-ins (tools + skills) shipped via nix-steipete-tools.
-    plugins = [
-      { source = "github:openclaw/nix-steipete-tools?dir=tools/summarize"; }
-    ];
+    bundledPlugins.summarize.enable = true;
   };
 }
 ```
@@ -531,39 +558,37 @@ Uses `instances.default` to unlock per-group mention rules. If `instances` is se
       };
     };
 
+    bundledPlugins.peekaboo.enable = true;
+    customPlugins = [
+      { source = "github:joshp123/xuezh?rev=<commit>&narHash=<narHash>"; }
+      {
+        source = "github:joshp123/padel-cli?rev=<commit>&narHash=<narHash>";
+        config = {
+          env = { PADEL_AUTH_FILE = "/run/agenix/padel-auth"; };
+          settings = {
+            default_location = "CITY_NAME";
+            preferred_times = [ "18:00" "20:00" ];
+            preferred_duration = 90;
+            venues = [
+              {
+                id = "VENUE_ID";
+                alias = "VENUE_ALIAS";
+                name = "VENUE_NAME";
+                indoor = true;
+                timezone = "TIMEZONE";
+              }
+            ];
+          };
+        };
+      }
+    ];
+
     instances.default = {
       enable = true;
       package = pkgs.openclaw; # batteries-included
       stateDir = "~/.openclaw";
       workspaceDir = "~/.openclaw/workspace";
       launchd.enable = true;
-
-      # Plugins (prod: pinned GitHub). Built-ins are via nix-steipete-tools.
-      # MVP target: repo pointers resolve to tools + skills automatically.
-      plugins = [
-        { source = "github:openclaw/nix-steipete-tools?dir=tools/peekaboo"; }
-        { source = "github:joshp123/xuezh"; }
-        {
-          source = "github:joshp123/padel-cli";
-          config = {
-            env = { PADEL_AUTH_FILE = "/run/agenix/padel-auth"; };
-            settings = {
-              default_location = "CITY_NAME";
-              preferred_times = [ "18:00" "20:00" ];
-              preferred_duration = 90;
-              venues = [
-                {
-                  id = "VENUE_ID";
-                  alias = "VENUE_ALIAS";
-                  name = "VENUE_NAME";
-                  indoor = true;
-                  timezone = "TIMEZONE";
-                }
-              ];
-            };
-          };
-        }
-      ];
     };
   };
 }
@@ -575,92 +600,44 @@ Uses `instances.default` to unlock per-group mention rules. If `instances` is se
 
 ### Dual-instance setup (prod + dev)
 
-Use a shared base config and override only what's different. After changing local plugin or gateway code, re-run `home-manager switch` to rebuild.
+Use named instances when you need two local gateways. Keep the default package unless you are actively debugging a local gateway checkout.
 
 ```nix
-# flake inputs (pin prod + app)
-inputs = {
-  nix-openclaw.url = "github:openclaw/nix-openclaw?ref=v0.1.0"; # pins macOS app + gateway bundle
-};
+programs.openclaw = {
+  documents = ./documents;
 
-let
-  prodConfig = {
-    channels.telegram = {
-      tokenFile = "/run/agenix/telegram-prod";
-      allowFrom = [ 12345678 ];
+  instances = {
+    prod = {
+      enable = true;
+      gatewayPort = 18789;
+      config.channels.telegram = {
+        tokenFile = "/run/agenix/telegram-prod";
+        allowFrom = [ 12345678 ];
+      };
+      plugins = [
+        { source = "github:owner/your-plugin?rev=<commit>&narHash=<narHash>"; }
+      ];
     };
-  };
-  devConfig = {
-    channels.telegram = {
-      tokenFile = "/run/agenix/telegram-dev";
-      allowFrom = [ 12345678 ];
-    };
-  };
-  prod = {
-    enable = true;
-    # Prod gateway pin (comes from nix-openclaw input @ v0.1.0 above).
-    package = inputs.nix-openclaw.packages.${pkgs.system}.openclaw-gateway;
-    config = prodConfig;
-    plugins = [ { source = "github:owner/your-plugin"; } ];
-  };
-in {
-  # Pinned macOS app (POC: no local app builds, uses nix-openclaw @ v0.1.0 above).
-  programs.openclaw.appPackage =
-    inputs.nix-openclaw.packages.${pkgs.system}.openclaw-app;
-  programs.openclaw.documents = ./documents;
-  programs.openclaw.instances = {
-    prod = prod;
-    dev = prod // {
-      # Dev uses the same pinned macOS app (from nix-openclaw input),
-      # but overrides the gateway package to a local checkout.
-      config = devConfig;
+
+    dev = {
+      enable = true;
       gatewayPort = 18790;
-      # Local gateway checkout (path). App stays pinned.
       gatewayPath = "/Users/you/code/openclaw";
-      # Local plugin overrides prod if names collide (last wins).
-      plugins = prod.plugins ++ [
+      config.channels.telegram = {
+        tokenFile = "/run/agenix/telegram-dev";
+        allowFrom = [ 12345678 ];
+      };
+      plugins = [
         { source = "path:/Users/you/code/your-plugin"; }
-        {
-          source = "github:joshp123/padel-cli";
-          config = {
-            env = { PADEL_AUTH_FILE = "/run/agenix/padel-auth-dev"; };
-            settings = {
-              default_location = "CITY_NAME";
-              preferred_times = [ "18:00" ];
-              preferred_duration = 90;
-              venues = [];
-            };
-          };
-        }
       ];
     };
   };
-}
+};
 ```
 
 ### Plugin collisions
 
 Plugins are keyed by their declared `name`. If two plugins declare the same name, the **last entry wins** (use this to override a prod plugin with a local dev one).
-
-### Tool overrides (avoid collisions)
-
-Home Manager auto-excludes `git` when `programs.git.enable = true`.
-
-Drop built-in tools that you already install elsewhere:
-
-```nix
-programs.openclaw.excludeTools = [ "git" "jq" "ripgrep" ];
-```
-
-Or provide a custom list:
-
-```nix
-programs.openclaw.toolNames = [ "nodejs_22" "pnpm_10" "summarize" ];
-```
-
-If you override `programs.openclaw.package`, use `pkgs.openclawPackages.withTools { ... }.openclaw` to apply these lists.
-
----
 
 ## Packaging & Updates
 
@@ -668,14 +645,24 @@ If you override `programs.openclaw.package`, use `pkgs.openclawPackages.withTool
 
 ### Stable release mirroring
 
-We ship a single pinned upstream stable release:
-- **Stable**: latest mirrored OpenClaw stable release tag. This is the default.
+We ship one default package: `.#openclaw`.
+
+The gateway tracks the newest upstream stable OpenClaw source release that satisfies the Nix package contract:
+- gateway builds on Linux and macOS
+- gateway starts and answers local health checks
+
+The macOS app is pinned separately to the newest stable public `OpenClaw-*.zip` artifact. If upstream has not promoted desktop assets for the latest source release yet, `openclaw-app` may lag; that must not block Linux users or macOS gateway users from getting the latest source-built OpenClaw.
+
+The Nix gate is deliberately package-focused. It does not make the full upstream Vitest suite a hard promotion gate; upstream owns source test health, while `nix-openclaw` verifies the source build, generated config options, package contents, smoke startup, module activation, and newest available macOS app artifact.
 
 Outputs:
 ```
 .#openclaw
 .#openclaw-gateway
+.#openclaw-app   # Darwin only
 ```
+
+`.#openclaw-gateway` and `.#openclaw-app` are component outputs for modules, CI, debugging, and advanced use. Start with `.#openclaw`.
 
 Pins live in:
 - `nix/sources/openclaw-source.nix`
@@ -685,15 +672,15 @@ Pins live in:
 
 - **openclaw (upstream)**: source code, tests, releases.
 - **nix-openclaw**: Nix packaging, pins, CI builds.
-- **moltinators**: update cadence, smoke tests, promotion, rollout/rollback.
+- **release automation**: update cadence, smoke tests, promotion, rollout/rollback.
 
 ### Automated pipeline
 
-1) Hourly **Yolo Update Pins** polls the newest non-prerelease OpenClaw GitHub release.
-2) If the pinned stable release already matches that newest stable release, it exits cleanly.
-3) If the newest stable release is missing the required public macOS release zip, yolo fails red and leaves the current pin untouched.
-4) If the newest stable release is complete, yolo materializes the source pin from the release tag ref, updates the app asset pin from the matching release zip, and regenerates config options from that same release source.
-5) Yolo then validates that exact release on the same Linux + macOS contract as repository `CI`.
+1) Hourly **Yolo Update Pins** polls upstream stable OpenClaw releases.
+2) It selects the newest stable source release and newest stable public macOS app zip independently.
+3) Newer source releases that lack public macOS app assets are reported as app lag, not skipped.
+4) Yolo materializes the source pin from the newest source tag ref, updates the app asset pin from the newest public app zip, and regenerates config options from the selected source.
+5) Yolo validates that source/app pin set on the same Linux + macOS contract as repository `CI`.
 6) Only after both validations pass does yolo push one release-mirroring commit to `main`.
 
 ---
@@ -730,10 +717,36 @@ home-manager switch --rollback  # revert
 
 | Package | Contents |
 | --- | --- |
-| `openclaw` (default) | macOS: gateway + app + tools · Linux: gateway + tools (headless) |
-| `openclaw-gateway` | Gateway CLI only |
-| `openclaw-tools` | Toolchain bundle (gateway helpers + CLIs) |
-| `openclaw-app` | macOS app only |
+| `openclaw` (default) | Canonical package. Exposes `openclaw`; keeps runtime tools internal. macOS also links the app. |
+| `openclaw-gateway` | Component output: gateway CLI/service only |
+| `openclaw-app` | Component output: macOS app only |
+
+### Local memory
+
+`openclaw` includes QMD internally as the supported local memory backend. It is not enabled automatically. Linux uses upstream `tobi/qmd`; Darwin uses the repaired `nix-openclaw-tools` package until upstream QMD is fixed there.
+
+Opt in through normal OpenClaw config:
+
+```nix
+programs.openclaw.config = {
+  memory.backend = "qmd";
+};
+```
+
+QMD stays inside the `openclaw` wrapper PATH, so users do not need to install a separate `qmd` command. The builtin `memorySearch.provider = "local"` path is an escape hatch for people who want to manage `node-llama-cpp` themselves; it is not the primary Nix-supported path.
+
+Plugin CLIs are also kept on the OpenClaw runtime PATH by default, not on the user's login shell PATH. Set `programs.openclaw.exposePluginPackages = true` only when you explicitly want plugin CLIs in `home.packages`.
+
+Optional model prewarming is also declarative:
+
+```nix
+programs.openclaw.qmd.prewarmModels.enable = true;
+```
+
+That runs a temporary QMD collection through `qmd update`, `qmd embed`, and
+`qmd query` during Home Manager activation, which warms the default embedding,
+expansion, and reranking models in the user's QMD cache. Expect about 2.25GB of
+cache use.
 
 ### What we manage vs what you manage
 
@@ -742,26 +755,24 @@ home-manager switch --rollback  # revert
 | Gateway binary | ✓ | |
 | macOS app | ✓ | |
 | Service (launchd/systemd) | ✓ | |
-| Tools (whisper, etc) | ✓ | |
+| Runtime tools and QMD | ✓ | |
 | Telegram bot token | | ✓ |
 | Anthropic API key | | ✓ |
 | Chat IDs | | ✓ |
 
-### Included tools
+### Runtime tools
 
 > **Platform note:** the toolchain is filtered per platform. macOS-only tools are skipped on Linux.
 
-**Core**: nodejs, pnpm, git, curl, jq, python3, ffmpeg, ripgrep
+The default `openclaw` package uses these tools internally and does not expose them as separate user commands.
 
-**First‑party tools** are sourced from `nix-steipete-tools` when available (currently aarch64‑darwin).
+**Core**: nodejs, pnpm, git, curl, jq, python3, ffmpeg, sox, ripgrep
 
-**AI/ML**: openai-whisper, sag (TTS)
+**Local memory**: QMD (`memory.backend = "qmd"` opt-in)
 
-**Media**: spotify-player, sox, camsnap
+**Default first-party tools** come from `nix-openclaw-tools`: gogcli (`gog`), goplaces, summarize, camsnap, sonoscli.
 
-**macOS**: peekaboo, blucli
-
-**Integrations**: gogcli, goplaces, wacli, bird, mcporter
+**Optional bundled plugins** add their own packages when enabled: discrawl, wacrawl, peekaboo, poltergeist, sag, imsg.
 
 ---
 

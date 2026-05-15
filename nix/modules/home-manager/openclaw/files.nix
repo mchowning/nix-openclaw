@@ -1,5 +1,4 @@
 {
-  config,
   lib,
   pkgs,
   openclawLib,
@@ -34,28 +33,38 @@ let
     in
     "${frontmatter}\n\n${body}\n";
 
-  skillAssertions =
+  duplicateSkillAssertion =
     let
-      names = map (skill: skill.name) cfg.skills;
-      nameCounts = lib.foldl' (acc: name: acc // { "${name}" = (acc.${name} or 0) + 1; }) { } names;
-      duplicateNames = lib.attrNames (lib.filterAttrs (_: v: v > 1) nameCounts);
+      targetsForInstance =
+        instName: inst:
+        let
+          base = "${toRelative (resolvePath inst.workspaceDir)}/skills";
+          userTargets = map (skill: "${base}/${skill.name}") cfg.skills;
+          pluginsForInstance = plugins.resolvedPluginsByInstance.${instName} or [ ];
+          pluginTargets = lib.flatten (
+            map (p: map (skillPath: "${base}/${builtins.baseNameOf skillPath}") p.skills) pluginsForInstance
+          );
+        in
+        userTargets ++ pluginTargets;
+      skillTargets = lib.flatten (lib.mapAttrsToList targetsForInstance enabledInstances);
+      counts = lib.foldl' (acc: path: acc // { "${path}" = (acc.${path} or 0) + 1; }) { } skillTargets;
+      duplicates = lib.attrNames (lib.filterAttrs (_: v: v > 1) counts);
     in
-    if duplicateNames == [ ] then
+    if duplicates == [ ] then
       [ ]
     else
       [
         {
           assertion = false;
-          message = "programs.openclaw.skills has duplicate names: ${lib.concatStringsSep ", " duplicateNames}";
+          message = "Duplicate skill paths detected: ${lib.concatStringsSep ", " duplicates}";
         }
       ];
 
-  skillFiles =
+  skillEntries =
     let
       entriesForInstance =
         instName: inst:
         let
-          base = "${toRelative (resolvePath inst.workspaceDir)}/skills";
           entryFor =
             skill:
             let
@@ -64,44 +73,30 @@ let
             in
             if mode == "inline" then
               {
-                name = "${base}/${skill.name}/SKILL.md";
-                value = {
-                  text = renderSkill skill;
-                };
+                source = pkgs.writeText "openclaw-skill-${skill.name}.md" (renderSkill skill);
+                target = "${resolvePath inst.workspaceDir}/skills/${skill.name}/SKILL.md";
               }
-            else if mode == "copy" then
+            else if mode == "copy" || mode == "symlink" then
               {
-                name = "${base}/${skill.name}";
-                value = {
-                  source = builtins.path {
-                    name = "openclaw-skill-${skill.name}";
-                    path = source;
-                  };
-                  recursive = true;
+                source = builtins.path {
+                  name = "openclaw-skill-${skill.name}";
+                  path = source;
                 };
+                target = "${resolvePath inst.workspaceDir}/skills/${skill.name}";
               }
             else
-              {
-                name = "${base}/${skill.name}";
-                value = {
-                  source = config.lib.file.mkOutOfStoreSymlink source;
-                  recursive = true;
-                };
-              };
+              throw "Unsupported OpenClaw skill mode: ${mode}";
           pluginEntriesFor =
             p:
             map (skillPath: {
-              name = "${base}/${builtins.baseNameOf skillPath}";
-              value = {
-                source = skillPath;
-                recursive = true;
-              };
+              source = skillPath;
+              target = "${resolvePath inst.workspaceDir}/skills/${builtins.baseNameOf skillPath}";
             }) p.skills;
           pluginsForInstance = plugins.resolvedPluginsByInstance.${instName} or [ ];
         in
         (map entryFor cfg.skills) ++ (lib.flatten (map pluginEntriesFor pluginsForInstance));
     in
-    lib.listToAttrs (lib.flatten (lib.mapAttrsToList entriesForInstance enabledInstances));
+    lib.flatten (lib.mapAttrsToList entriesForInstance enabledInstances);
 
   documentsRequiredFiles = [
     "AGENTS.md"
@@ -145,44 +140,60 @@ let
     }
   ];
 
-  documentsGuard = lib.optionalString documentsEnabled (
-    let
-      guardLine = file: ''
-        if [ -e "${file}" ] && [ ! -L "${file}" ]; then
-          echo "OpenClaw documents are managed by Nix. Please adopt ${file} into your documents directory and re-run." >&2
-          exit 1
-        fi
-      '';
-      guardForDir = dir: ''
-        ${lib.concatStringsSep "\n" (map (name: guardLine "${dir}/${name}") documentsFileNames)}
-      '';
-    in
-    lib.concatStringsSep "\n" (map guardForDir instanceWorkspaceDirs)
-  );
-
   toolsReport =
     if documentsEnabled then
       let
-        toolNames = toolSets.toolNames or [ ];
         renderPkgName = pkg: if pkg ? pname then pkg.pname else lib.getName pkg;
+        renderPkgCommand =
+          pkg:
+          let
+            pkgName = renderPkgName pkg;
+            commandName = pkg.meta.mainProgram or pkgName;
+          in
+          if commandName == pkgName then commandName else "${commandName} (${pkgName})";
+        toolPackages = lib.filter (p: p != null) (toolSets.tools or [ ]);
         renderPlugin =
           plugin:
           let
-            pkgNames = map renderPkgName (lib.filter (p: p != null) plugin.packages);
+            pkgNames = map renderPkgCommand (lib.filter (p: p != null) plugin.packages);
             pkgSuffix = if pkgNames == [ ] then "" else " — " + (lib.concatStringsSep ", " pkgNames);
           in
           "- " + plugin.name + pkgSuffix + " (" + plugin.source + ")";
+        renderPkgList =
+          packages:
+          let
+            actualPackages = lib.filter (p: p != null) packages;
+          in
+          if actualPackages == [ ] then
+            [ "- (none)" ]
+          else
+            map (pkg: "- " + renderPkgCommand pkg) actualPackages;
         pluginLinesFor =
           instName: inst:
           let
             pluginsForInstance = plugins.resolvedPluginsByInstance.${instName} or [ ];
-            lines = if pluginsForInstance == [ ] then [ "- (none)" ] else map renderPlugin pluginsForInstance;
+            pluginLines =
+              if pluginsForInstance == [ ] then [ "- (none)" ] else map renderPlugin pluginsForInstance;
+            runtimePackages = lib.unique (
+              (lib.optional (openclawLib.qmdPackage != null) openclawLib.qmdPackage)
+              ++ (cfg.runtimePackages or [ ])
+              ++ (inst.runtimePackages or [ ])
+            );
           in
           [
             ""
             "### Instance: ${instName}"
           ]
-          ++ lines;
+          ++ [
+            ""
+            "Plugins:"
+          ]
+          ++ pluginLines
+          ++ [
+            ""
+            "Runtime packages:"
+          ]
+          ++ renderPkgList runtimePackages;
         reportLines = [
           "<!-- BEGIN NIX-REPORT -->"
           ""
@@ -190,7 +201,9 @@ let
           ""
           "### Built-in toolchain"
         ]
-        ++ (if toolNames == [ ] then [ "- (none)" ] else map (name: "- " + name) toolNames)
+        ++ (
+          if toolPackages == [ ] then [ "- (none)" ] else map (pkg: "- " + renderPkgCommand pkg) toolPackages
+        )
         ++ [
           ""
           "## Nix-managed plugin report"
@@ -200,7 +213,7 @@ let
         ++ lib.concatLists (lib.mapAttrsToList pluginLinesFor enabledInstances)
         ++ [
           ""
-          "Tools: batteries-included toolchain + plugin-provided CLIs."
+          "Tools: batteries-included toolchain + runtime packages + plugin-provided CLIs."
           ""
           "<!-- END NIX-REPORT -->"
         ];
@@ -220,33 +233,39 @@ let
     else
       null;
 
-  documentsFiles =
+  documentEntries =
     if documentsEnabled then
       let
         mkDocFiles =
           dir:
           let
             mkDoc = name: {
-              name = toRelative (dir + "/${name}");
-              value = {
-                source = if name == "TOOLS.md" then toolsWithReport else cfg.documents + "/${name}";
-              };
+              source = if name == "TOOLS.md" then toolsWithReport else cfg.documents + "/${name}";
+              target = dir + "/${name}";
             };
           in
-          lib.listToAttrs (map mkDoc documentsFileNames);
+          map mkDoc documentsFileNames;
       in
-      lib.mkMerge (map mkDocFiles instanceWorkspaceDirs)
+      lib.flatten (map mkDocFiles instanceWorkspaceDirs)
     else
-      { };
+      [ ];
+
+  materializedEntries = documentEntries ++ skillEntries;
+  materializedManifest =
+    let
+      renderEntry = entry: "${entry.source}\t${entry.target}";
+    in
+    pkgs.writeText "openclaw-workspace-files.tsv" (
+      (lib.concatStringsSep "\n" (map renderEntry materializedEntries)) + "\n"
+    );
 
 in
 {
   inherit
     documentsEnabled
     documentsAssertions
-    documentsGuard
-    documentsFiles
-    skillAssertions
-    skillFiles
+    materializedManifest
+    materializedEntries
+    duplicateSkillAssertion
     ;
 }

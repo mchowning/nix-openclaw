@@ -50,7 +50,7 @@ plugin/
 That's it. No registry. No central authority. Point at a repo, get a plugin.
 
 One install gives you:
-- **Binary** on PATH (built from source, pinned version)
+- **Binary** on the OpenClaw runtime PATH (built from source, pinned version)
 - **Skills** in workspace (agent knows how to use it)
 - **Config** validated (missing env = install fails, not runtime error)
 - **State dirs** created (plugin has a home)
@@ -203,7 +203,7 @@ voicecall status --call-id abc123  # Check for responses
 4. **Create state dirs** — from manifest
 5. **Add `openclaw plugins` CLI** — list, enable, disable, info
 
-That's it. No dynamic code loading, no TypeBox registration, no RPC handlers. Just: find plugins, validate their needs, put binaries on PATH, copy skills to workspace.
+That's it. No dynamic code loading, no TypeBox registration, no RPC handlers. Just: find plugins, validate their needs, put binaries on the OpenClaw runtime PATH, copy skills to workspace.
 
 ### How nix-openclaw fits in
 
@@ -217,7 +217,7 @@ programs.openclaw.customPlugins = [
   { source = "github:joshp123/padel-cli"; }
 
   # Local dev: point at directory
-  { source = "path:/Users/josh/code/my-plugin"; }
+  { source = "path:/home/user/code/my-plugin"; }
 ];
 
 # Or enable bundled plugins (pinned in nix-openclaw):
@@ -304,17 +304,18 @@ Install wires up Twilio creds. Binary handles webhook server. Skill teaches agen
 
 ## The Plugin Ecosystem Vision
 
-**First-party plugins** already exist — see [nix-steipete-tools](https://github.com/openclaw/nix-steipete-tools/tree/main/tools):
+**First-party plugins** already exist — see [nix-openclaw-tools](https://github.com/openclaw/nix-openclaw-tools/tree/main/tools):
 - `summarize` — YouTube/article summarization
-- `oracle` — second-model review
+- `discrawl` — Discord archive/search
+- `wacrawl` — WhatsApp archive/search
 - `peekaboo` — screenshot capture
 - `camsnap` — webcam capture
-- `poltergeist` — browser automation
-- `sag` — web search
-- `bird` — Twitter/X integration
+- `poltergeist` — file watching and automation
+- `sag` — text-to-speech
 - `sonoscli` — Sonos control
 - `imsg` — iMessage integration
 - `gogcli` — Google Calendar
+- `goplaces` — Google Places
 
 All follow the same contract. All pinned in nix-openclaw. Enable with one line:
 ```nix

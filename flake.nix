@@ -13,7 +13,10 @@
     flake-utils.url = "github:numtide/flake-utils";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
-    nix-steipete-tools.url = "github:openclaw/nix-steipete-tools";
+    nix-openclaw-tools.url = "github:openclaw/nix-openclaw-tools";
+    qmd.url = "github:tobi/qmd/v2.1.0";
+    qmd.inputs.flake-utils.follows = "flake-utils";
+    qmd.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -22,11 +25,27 @@
       nixpkgs,
       flake-utils,
       home-manager,
-      nix-steipete-tools,
+      nix-openclaw-tools,
+      qmd,
     }:
     let
-      overlay = import ./nix/overlay.nix;
+      openclawToolPkgsFor =
+        system:
+        if nix-openclaw-tools ? packages && builtins.hasAttr system nix-openclaw-tools.packages then
+          nix-openclaw-tools.packages.${system}
+        else
+          { };
+      qmdPkgsFor =
+        system:
+        if qmd ? packages && builtins.hasAttr system qmd.packages then qmd.packages.${system} else { };
+      overlay =
+        final: prev:
+        import ./nix/overlay.nix {
+          openclawToolPkgs = openclawToolPkgsFor prev.stdenv.hostPlatform.system;
+          qmdPkgs = qmdPkgsFor prev.stdenv.hostPlatform.system;
+        } final prev;
       sourceInfoStable = import ./nix/sources/openclaw-source.nix;
+      sourceInfoDogfood = import ./nix/sources/openclaw-dogfood-source.nix;
       systems = [
         "x86_64-linux"
         "aarch64-darwin"
@@ -39,15 +58,24 @@
           inherit system;
           overlays = [ overlay ];
         };
-        steipetePkgs =
-          if nix-steipete-tools ? packages && builtins.hasAttr system nix-steipete-tools.packages then
-            nix-steipete-tools.packages.${system}
+        openclawToolPkgs = openclawToolPkgsFor system;
+        qmdPkgs = qmdPkgsFor system;
+        qmdPackage =
+          if pkgs.stdenv.hostPlatform.isDarwin then
+            openclawToolPkgs.qmd or null
           else
-            { };
+            qmdPkgs.qmd or qmdPkgs.default or null;
         packageSetStable = import ./nix/packages {
           pkgs = pkgs;
           sourceInfo = sourceInfoStable;
-          steipetePkgs = steipetePkgs;
+          openclawToolPkgs = openclawToolPkgs;
+          inherit qmdPackage;
+        };
+        packageSetDogfood = import ./nix/packages {
+          pkgs = pkgs;
+          sourceInfo = sourceInfoDogfood;
+          openclawToolPkgs = openclawToolPkgs;
+          inherit qmdPackage;
         };
       in
       {
@@ -59,33 +87,52 @@
 
         packages = packageSetStable // {
           default = packageSetStable.openclaw;
+          openclaw-dogfood = packageSetDogfood.openclaw;
+          openclaw-gateway-dogfood = packageSetDogfood.openclaw-gateway;
         };
 
         apps = {
-          openclaw = flake-utils.lib.mkApp { drv = packageSetStable.openclaw-gateway; };
+          openclaw = flake-utils.lib.mkApp { drv = packageSetStable.openclaw; };
         };
 
         checks =
           let
             baseChecks = {
               gateway = packageSetStable.openclaw-gateway;
+              bin-surface = pkgs.callPackage ./nix/checks/openclaw-bin-surface.nix {
+                openclawPackage = packageSetStable.openclaw;
+              };
               package-contents = pkgs.callPackage ./nix/checks/openclaw-package-contents.nix {
                 openclawGateway = packageSetStable.openclaw-gateway;
               };
+              package-contents-dogfood = pkgs.callPackage ./nix/checks/openclaw-package-contents.nix {
+                openclawGateway = packageSetDogfood.openclaw-gateway;
+              };
+              default-instance = pkgs.callPackage ./nix/checks/openclaw-default-instance.nix { };
               config-validity = pkgs.callPackage ./nix/checks/openclaw-config-validity.nix {
                 openclawGateway = packageSetStable.openclaw-gateway;
+              };
+              gateway-smoke = pkgs.callPackage ./nix/checks/openclaw-gateway-smoke.nix {
+                openclawGateway = packageSetStable.openclaw-gateway;
+              };
+            }
+            // pkgs.lib.optionalAttrs (qmdPackage != null) {
+              qmd-runtime = pkgs.callPackage ./nix/checks/openclaw-qmd-runtime.nix {
+                openclawPackage = packageSetStable.openclaw;
+                inherit qmdPackage;
               };
             }
             // (
               if pkgs.stdenv.hostPlatform.isLinux then
+                let
+                  sourceChecks = pkgs.callPackage ./nix/checks/openclaw-source-checks.nix {
+                    sourceInfo = sourceInfoStable;
+                    openclawGateway = packageSetStable.openclaw-gateway;
+                  };
+                in
                 {
-                  gateway-tests = pkgs.callPackage ./nix/checks/openclaw-gateway-tests.nix {
-                    sourceInfo = sourceInfoStable;
-                  };
-                  config-options = pkgs.callPackage ./nix/checks/openclaw-config-options.nix {
-                    sourceInfo = sourceInfoStable;
-                  };
-                  default-instance = pkgs.callPackage ./nix/checks/openclaw-default-instance.nix { };
+                  config-options = sourceChecks;
+                  source-checks = sourceChecks;
                   hm-activation = import ./nix/checks/openclaw-hm-activation.nix {
                     inherit pkgs home-manager;
                   };
@@ -103,7 +150,6 @@
               paths = [
                 packageSetStable.openclaw
                 packageSetStable.openclaw-gateway
-                packageSetStable.openclaw-tools
               ]
               ++ (builtins.attrValues baseChecks);
             };
@@ -120,6 +166,10 @@
     )
     // {
       overlays.default = overlay;
+      templates.agent-first = {
+        path = ./templates/agent-first;
+        description = "Agent-first Home Manager setup for OpenClaw through Nix.";
+      };
       nixosModules.openclaw-gateway = import ./nix/modules/nixos/openclaw-gateway.nix;
       homeManagerModules.openclaw = import ./nix/modules/home-manager/openclaw.nix;
       darwinModules.openclaw = import ./nix/modules/darwin/openclaw.nix;

@@ -1,4 +1,8 @@
-{ lib, openclawLib }:
+{
+  lib,
+  openclawLib,
+  pluginOptionType,
+}:
 
 { name, config, ... }:
 {
@@ -65,22 +69,20 @@
       description = "pnpmDeps hash for local gateway builds (omit to let Nix suggest the correct hash).";
     };
 
+    runtimePackages = lib.mkOption {
+      type = lib.types.listOf lib.types.package;
+      default = [ ];
+      description = "Extra packages visible to this OpenClaw instance and its isolated Codex harness only. These are not added to the user's PATH.";
+    };
+
+    environment = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      description = "Extra runtime environment for this OpenClaw gateway wrapper. Values that point to files are read at runtime unless the variable name ends in _FILE.";
+    };
+
     plugins = lib.mkOption {
-      type = lib.types.listOf (
-        lib.types.submodule {
-          options = {
-            source = lib.mkOption {
-              type = lib.types.str;
-              description = "Plugin source pointer (e.g., github:owner/repo or path:/...).";
-            };
-            config = lib.mkOption {
-              type = lib.types.attrs;
-              default = { };
-              description = "Plugin-specific configuration (env/files/etc).";
-            };
-          };
-        }
-      );
+      type = lib.types.listOf pluginOptionType;
       default = openclawLib.effectivePlugins;
       description = "Plugins enabled for this instance (includes bundled plugin toggles).";
     };

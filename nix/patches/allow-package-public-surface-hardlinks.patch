@@ -1,0 +1,23 @@
+diff --git a/src/plugins/public-surface-loader.ts b/src/plugins/public-surface-loader.ts
+--- a/src/plugins/public-surface-loader.ts
++++ b/src/plugins/public-surface-loader.ts
+@@ -132,12 +132,16 @@ export function loadBundledPluginPublicArtifactModuleSync<T extends object>(para
+   if (cached) {
+     return cached as T;
+   }
+ 
+-  const opened = openRootFileSync({
++  const packageRoot = path.resolve(OPENCLAW_PACKAGE_ROOT);
++  const resolvedModulePath = path.resolve(location.modulePath);
++  const isPackagePublicSurface = resolvedModulePath.startsWith(`${packageRoot}${path.sep}`);
++
++  const opened = openRootFileSync({
+     absolutePath: location.modulePath,
+     rootPath: location.boundaryRoot,
+     boundaryLabel:
+       location.boundaryRoot === OPENCLAW_PACKAGE_ROOT ? "OpenClaw package root" : "plugin root",
+-    rejectHardlinks: true,
++    rejectHardlinks: !isPackagePublicSurface,
+   });
+   if (!opened.ok) {
+     throw new Error(

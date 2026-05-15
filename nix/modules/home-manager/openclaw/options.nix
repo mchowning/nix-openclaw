@@ -7,7 +7,35 @@
 
 let
   openclawLib = import ./lib.nix { inherit config lib pkgs; };
-  instanceModule = import ./options-instance.nix { inherit lib openclawLib; };
+  pluginOptionType = lib.types.submodule {
+    options = {
+      source = lib.mkOption {
+        type = lib.types.str;
+        description = "Plugin source. Use a plugin flake source (github:/path:) or an OpenClaw npm install source (npm:@scope/package@version).";
+      };
+      config = lib.mkOption {
+        type = lib.types.attrs;
+        default = { };
+        description = "Nix capability plugin configuration (env/files/etc). Runtime OpenClaw plugin config belongs under programs.openclaw.config.plugins.entries.<id>.config.";
+      };
+      id = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "OpenClaw runtime plugin id. Required for npm: sources so Nix can enable the plugin without build-time introspection.";
+      };
+      enabled = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Default enabled state for an OpenClaw runtime plugin entry.";
+      };
+      hash = lib.mkOption {
+        type = lib.types.str;
+        default = lib.fakeHash;
+        description = "Recursive output hash for npm: runtime plugin sources. Use the hash Nix reports when this is left as lib.fakeHash.";
+      };
+    };
+  };
+  instanceModule = import ./options-instance.nix { inherit lib openclawLib pluginOptionType; };
   pluginCatalog = import ./plugin-catalog.nix;
   mkSkillOption = lib.types.submodule {
     options = {
@@ -107,6 +135,18 @@ in
       };
     };
 
+    runtimePackages = lib.mkOption {
+      type = lib.types.listOf lib.types.package;
+      default = [ ];
+      description = "Extra packages visible to the OpenClaw gateway and isolated Codex harness only. These are not added to the user's PATH.";
+    };
+
+    environment = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      description = "Extra runtime environment for OpenClaw gateway wrappers. Values that point to files are read at runtime unless the variable name ends in _FILE.";
+    };
+
     documents = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = null;
@@ -120,43 +160,23 @@ in
     };
 
     customPlugins = lib.mkOption {
-      type = lib.types.listOf (
-        lib.types.submodule {
-          options = {
-            source = lib.mkOption {
-              type = lib.types.str;
-              description = "Plugin source pointer (e.g., github:owner/repo or path:/...).";
-            };
-            config = lib.mkOption {
-              type = lib.types.attrs;
-              default = { };
-              description = "Plugin-specific configuration (env/files/etc).";
-            };
-          };
-        }
-      );
+      type = lib.types.listOf pluginOptionType;
       default = [ ];
-      description = "Custom/community plugins (merged with bundled plugin toggles).";
+      description = "Custom/community plugins (merged with bundled plugin toggles). Flake sources provide Nix capability plugins; npm: sources provide OpenClaw runtime plugins.";
     };
 
-    bundledPlugins =
-      lib.mapAttrs
-        (
-          name: plugin:
-          {
-            enable = lib.mkOption {
-              type = lib.types.bool;
-              default = plugin.defaultEnable or false;
-              description = "Enable the ${name} plugin (bundled).";
-            };
-            config = lib.mkOption {
-              type = lib.types.attrs;
-              default = { };
-              description = "Bundled plugin configuration passed through to ${name} (env/settings).";
-            };
-          }
-        )
-        pluginCatalog;
+    bundledPlugins = lib.mapAttrs (name: plugin: {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = plugin.defaultEnable or false;
+        description = "Enable the ${name} plugin (bundled).";
+      };
+      config = lib.mkOption {
+        type = lib.types.attrs;
+        default = { };
+        description = "Bundled plugin configuration passed through to ${name} (env/settings).";
+      };
+    }) pluginCatalog;
 
     launchd.enable = lib.mkOption {
       type = lib.types.bool;
@@ -190,8 +210,14 @@ in
 
     exposePluginPackages = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = "Add plugin packages to home.packages so CLIs are on PATH.";
+    };
+
+    qmd.prewarmModels.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Download/check QMD's default GGUF models during Home Manager activation. This uses about 2.25GB under the user's QMD cache.";
     };
 
     reloadScript = {

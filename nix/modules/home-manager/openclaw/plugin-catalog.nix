@@ -5,6 +5,18 @@
     linux = true;
   };
 
+  discrawl = {
+    tool = "discrawl";
+    description = "Archive and search Discord history";
+    linux = true;
+  };
+
+  wacrawl = {
+    tool = "wacrawl";
+    description = "Archive and search WhatsApp Desktop history";
+    linux = true;
+  };
+
   peekaboo = {
     tool = "peekaboo";
     description = "Screenshot your screen";
@@ -13,7 +25,7 @@
 
   poltergeist = {
     tool = "poltergeist";
-    description = "Click, type, control macOS UI";
+    description = "File watching and automation";
     linux = false;
   };
 
@@ -42,10 +54,10 @@
     linux = true;
   };
 
-  bird = {
-    tool = "bird";
-    description = "Twitter/X integration";
-    linux = false;
+  qmd = {
+    tool = "qmd";
+    description = "Search local markdown knowledge bases";
+    linux = true;
   };
 
   sonoscli = {

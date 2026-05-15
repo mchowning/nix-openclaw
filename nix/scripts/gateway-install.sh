@@ -17,6 +17,11 @@ log_step() {
   printf '>> [timing] %s: %ss\n' "$name" "$((end - start))" >&2
 }
 
+if [ -n "${OPENCLAW_BUILD_ROOT_SH:-}" ]; then
+  . "$OPENCLAW_BUILD_ROOT_SH"
+  openclaw_enter_build_root
+fi
+
 check_no_broken_symlinks() {
   root="$1"
   if [ ! -d "$root" ]; then
@@ -37,12 +42,31 @@ check_no_broken_symlinks() {
   rm -f "$broken_tmp"
 }
 
+copy_extension_manifests() {
+  if [ ! -d extensions ]; then
+    return 0
+  fi
+
+  mkdir -p "$out/lib/openclaw/extensions"
+  find extensions -mindepth 2 -maxdepth 2 -name openclaw.plugin.json -type f -print | while IFS= read -r manifest; do
+    name="$(basename "$(dirname "$manifest")")"
+    mkdir -p "$out/lib/openclaw/extensions/$name"
+    cp "$manifest" "$out/lib/openclaw/extensions/$name/openclaw.plugin.json"
+  done
+}
+
 mkdir -p "$out/lib/openclaw" "$out/bin"
 
-# Build dir is ephemeral in Nix; moving avoids an expensive deep copy of node_modules.
-log_step "move build outputs" mv dist node_modules package.json "$out/lib/openclaw/"
+set -- dist node_modules package.json
+if [ -d dist-runtime ]; then
+  set -- "$@" dist-runtime
+fi
+log_step "copy build outputs" cp -R "$@" "$out/lib/openclaw/"
 if [ -d extensions ]; then
-  log_step "copy extensions" cp -r extensions "$out/lib/openclaw/"
+  log_step "copy extension manifests" copy_extension_manifests
+fi
+if [ -d skills ]; then
+  log_step "copy bundled skills" cp -r skills "$out/lib/openclaw/"
 fi
 
 # Gateway plugin discovery looks under dist/extensions/*/openclaw.plugin.json.
@@ -71,8 +95,6 @@ if [ ! -f "$STDENV_SETUP" ]; then
   echo "STDENV_SETUP not found: $STDENV_SETUP" >&2
   exit 1
 fi
-
-log_step "patchShebangs node_modules/.bin" bash -e -c '. "$STDENV_SETUP"; patchShebangs "$out/lib/openclaw/node_modules/.bin"'
 
 # Work around missing dependency declaration in pi-coding-agent (strip-ansi).
 # Ensure it is resolvable at runtime without changing upstream.
@@ -128,6 +150,13 @@ if [ -n "$hasown_src" ]; then
   fi
 fi
 
-log_step "validate node_modules symlinks" check_no_broken_symlinks "$out/lib/openclaw/node_modules"
+if [ -n "${OPENCLAW_BUILD_ROOT_SH:-}" ]; then
+  openclaw_cleanup_output_pnpm_store
+fi
 
-bash -e -c '. "$STDENV_SETUP"; makeWrapper "$NODE_BIN" "$out/bin/openclaw" --add-flags "$out/lib/openclaw/dist/index.js" --set-default OPENCLAW_NIX_MODE "1"'
+log_step "validate node_modules symlinks" check_no_broken_symlinks "$out/lib/openclaw/node_modules"
+if [ -d "$out/lib/openclaw/dist-runtime" ]; then
+  log_step "validate dist-runtime symlinks" check_no_broken_symlinks "$out/lib/openclaw/dist-runtime"
+fi
+
+log_step "wrap openclaw" bash -e -c '. "$STDENV_SETUP"; makeWrapper "$NODE_BIN" "$out/bin/openclaw" --add-flags "$out/lib/openclaw/dist/index.js" --set-default OPENCLAW_NIX_MODE "1"'
