@@ -45,7 +45,7 @@ ensure_root_package_link() {
     return 0
   fi
 
-  pkg_dir="$(find node_modules/.pnpm -path "*/node_modules/$pkg" -type d | head -n 1)"
+  pkg_dir="$(find node_modules/.pnpm -path "*/node_modules/$pkg" -print | head -n 1)"
   if [ -z "$pkg_dir" ]; then
     return 0
   fi
@@ -54,20 +54,8 @@ ensure_root_package_link() {
   ln -s "$pkg_dir" "$root_path"
 }
 
-ensure_root_bin_link() {
-  bin_name="$1"
-  target_rel="$2"
-  bin_path="node_modules/.bin/$bin_name"
-
-  mkdir -p "$(dirname "$bin_path")"
-  rm -f "$bin_path"
-  ln -s "$target_rel" "$bin_path"
-}
-
 ensure_root_package_link "tsdown"
 ensure_root_package_link "tsx"
-ensure_root_bin_link "tsdown" "../tsdown/dist/run.mjs"
-ensure_root_bin_link "tsx" "../tsx/dist/cli.mjs"
 
 tsdown_cli="node_modules/tsdown/dist/run.mjs"
 if [ ! -f "$tsdown_cli" ]; then
@@ -100,7 +88,13 @@ fi
 
 log_step "patchShebangs node_modules/.bin" bash -e -c ". \"$STDENV_SETUP\"; patchShebangs node_modules/.bin"
 
-log_step "node $tsdown_cli" node "$tsdown_cli" --config-loader unrun --logLevel warn
+tsdown_node_options="${NODE_OPTIONS:-}"
+case "$tsdown_node_options" in
+  *--max-old-space-size*) ;;
+  *) tsdown_node_options="${tsdown_node_options:+$tsdown_node_options }--max-old-space-size=${OPENCLAW_NIX_TSDOWN_MAX_OLD_SPACE_MB:-8192}" ;;
+esac
+
+log_step "node $tsdown_cli" env NODE_OPTIONS="$tsdown_node_options" node "$tsdown_cli" --config-loader unrun --logLevel warn
 log_step "node scripts/build-stamp.mjs" node scripts/build-stamp.mjs
 log_step "node $tsc_cli" node "$tsc_cli" -p tsconfig.plugin-sdk.dts.json
 log_step "node --import tsx scripts/write-plugin-sdk-entry-dts.ts" node --import tsx scripts/write-plugin-sdk-entry-dts.ts

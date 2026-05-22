@@ -5,6 +5,7 @@
   fetchurl,
   nodejs_22,
   pnpm_10,
+  pnpm_11,
   fetchPnpmDeps,
   pkg-config,
   jq,
@@ -23,7 +24,6 @@
 {
   pname,
   sourceInfo,
-  pnpmDepsHash ? (sourceInfo.pnpmDepsHash or null),
   pnpmDepsPname ? "openclaw-gateway",
   gatewaySrc ? null,
   src ? null,
@@ -31,11 +31,13 @@
   extraNativeBuildInputs ? [ ],
   extraBuildInputs ? [ ],
   extraEnv ? { },
+  pnpmDepsHash ? (sourceInfo.pnpmDepsHash or null),
 }:
 
 let
   sourceFetch = lib.removeAttrs sourceInfo [
     "pnpmDepsHash"
+    "pnpmMajor"
     "releaseTag"
     "releaseVersion"
     "applyPublicSurfaceHardlinksPatch"
@@ -64,21 +66,36 @@ let
     sourceInfo.publicSurfaceHardlinksPatch or ../patches/allow-package-public-surface-hardlinks.patch;
 
   nodeAddonApi = import ../packages/node-addon-api.nix { inherit stdenv fetchurl; };
+  pnpmMajor = toString (sourceInfo.pnpmMajor or "10");
+  pnpmByMajor = {
+    "10" = pnpm_10;
+    "11" = pnpm_11;
+  };
+  selectedPnpm = pnpmByMajor.${pnpmMajor} or (throw "Unsupported OpenClaw pnpm major ${pnpmMajor}");
 
   pnpmDeps = fetchPnpmDeps {
     pname = pnpmDepsPname;
     inherit version;
     src = resolvedSrc;
-    pnpm = pnpm_10;
+    pnpm = selectedPnpm;
     hash = if pnpmDepsHash != null then pnpmDepsHash else lib.fakeHash;
     fetcherVersion = 3;
+    prePnpmInstall = ''
+      pnpm config set fetch-timeout 600000
+      pnpm config set fetch-retries 5
+      pnpm config set fetch-retry-mintimeout 10000
+      pnpm config set fetch-retry-maxtimeout 120000
+      pnpm config set network-concurrency 8
+    '';
+    preFixup = lib.optionalString (pnpmMajor == "11") ''
+      ${nodejs_22}/bin/node --no-warnings ${../scripts/normalize-pnpm-store-index.js} "$storePath"
+    '';
     npm_config_arch = pnpmArch;
     npm_config_platform = pnpmPlatform;
-    pnpmInstallFlags = [ "--prod=false" ];
-    nativeBuildInputs = [ git ];
-    prePnpmInstall = ''
-      ${../scripts/patch-pnpm-10-lock.sh} pnpm-lock.yaml
-    '';
+    nativeBuildInputs = [
+      git
+      nodejs_22
+    ];
   };
 
   envBase = {
@@ -92,7 +109,6 @@ let
     OPENCLAW_BUILD_ROOT_SH = "${../scripts/build-root.sh}";
     NODE_GYP_WRAPPER_SH = "${../scripts/node-gyp-wrapper.sh}";
     GATEWAY_PREBUILD_SH = "${../scripts/gateway-prebuild.sh}";
-    PATCH_PNPM_10_LOCK_SH = "${../scripts/patch-pnpm-10-lock.sh}";
     PATCH_BUNDLED_RUNTIME_DEPS_SCRIPT = "${../patches/stage-bundled-plugin-runtime-deps.mjs}";
     PATCH_PUBLIC_SURFACE_HARDLINKS =
       if sourceInfo.applyPublicSurfaceHardlinksPatch or true then
@@ -117,15 +133,17 @@ in
   inherit
     version
     pnpmDeps
+    pnpmMajor
     resolvedSrc
     pnpmPlatform
     pnpmArch
     nodeAddonApi
+    selectedPnpm
     ;
 
   nativeBuildInputs = [
     nodejs_22
-    pnpm_10
+    selectedPnpm
     pkg-config
     jq
     python3
@@ -139,7 +157,12 @@ in
   env = envBase // (lib.optionalAttrs enableSharp { SHARP_IGNORE_GLOBAL_LIBVIPS = "1"; }) // extraEnv;
 
   passthru = {
-    inherit sourceInfo pnpmDeps;
+    inherit
+      sourceInfo
+      pnpmDeps
+      pnpmMajor
+      selectedPnpm
+      ;
     pinnedRev = sourceInfo.rev;
   };
 }
