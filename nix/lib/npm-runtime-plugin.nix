@@ -2,6 +2,7 @@
   lib,
   stdenvNoCC,
   nodejs_22,
+  cacert,
 }:
 
 {
@@ -22,7 +23,10 @@ stdenvNoCC.mkDerivation {
   pname = "openclaw-runtime-plugin-${safeName}";
   version = "1";
 
-  nativeBuildInputs = [ nodejs_22 ];
+  nativeBuildInputs = [
+    nodejs_22
+    cacert
+  ];
 
   dontUnpack = true;
   dontConfigure = true;
@@ -35,6 +39,9 @@ stdenvNoCC.mkDerivation {
   env = {
     OPENCLAW_RUNTIME_PLUGIN_ID = id;
     OPENCLAW_RUNTIME_PLUGIN_NPM_SPEC = npmSpec;
+    NIX_SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+    SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+    npm_config_cafile = "${cacert}/etc/ssl/certs/ca-bundle.crt";
   };
 
   installPhase = "${../scripts/npm-runtime-plugin-install.sh}";
