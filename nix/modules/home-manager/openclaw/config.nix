@@ -78,6 +78,18 @@ let
     else
       value;
 
+  execSecretFlowDocsUrl = "https://github.com/openclaw/nix-openclaw#secrets-and-openclaw-exec-secretrefs";
+
+  containsExecSecretFlow =
+    value:
+    if builtins.isAttrs value then
+      ((value.source or null) == "exec" && ((value ? command) || ((value ? provider) && (value ? id))))
+      || lib.any containsExecSecretFlow (builtins.attrValues value)
+    else if builtins.isList value then
+      lib.any containsExecSecretFlow value
+    else
+      false;
+
   baseConfig = {
     gateway = {
       mode = "local";
@@ -120,23 +132,32 @@ let
       userConfig = stripNulls (lib.recursiveUpdate (stripNulls cfg.config) (stripNulls inst.config));
       pluginEntryConfig = plugins.openclawPluginEntriesConfigFor name;
       openclawPluginLoadPaths = plugins.openclawPluginLoadPathsFor name;
+      nixSkillLoadDirs = files.skillLoadDirsForInstance name;
       mergedConfigWithoutLoadPaths = stripNulls (
         lib.recursiveUpdate (lib.recursiveUpdate baseConfig pluginEntryConfig) userConfig
       );
       existingOpenClawPluginLoadPaths = (
         ((mergedConfigWithoutLoadPaths.plugins or { }).load or { }).paths or [ ]
       );
-      mergedConfig0 =
-        if openclawPluginLoadPaths == [ ] then
-          mergedConfigWithoutLoadPaths
-        else
-          lib.recursiveUpdate mergedConfigWithoutLoadPaths {
-            plugins = {
-              load = {
-                paths = lib.unique (openclawPluginLoadPaths ++ existingOpenClawPluginLoadPaths);
-              };
+      existingSkillLoadDirs = (
+        ((mergedConfigWithoutLoadPaths.skills or { }).load or { }).extraDirs or [ ]
+      );
+      generatedLoadConfig =
+        lib.optionalAttrs (openclawPluginLoadPaths != [ ]) {
+          plugins = {
+            load = {
+              paths = lib.unique (openclawPluginLoadPaths ++ existingOpenClawPluginLoadPaths);
             };
           };
+        }
+        // lib.optionalAttrs (nixSkillLoadDirs != [ ]) {
+          skills = {
+            load = {
+              extraDirs = lib.unique (nixSkillLoadDirs ++ existingSkillLoadDirs);
+            };
+          };
+        };
+      mergedConfig0 = lib.recursiveUpdate mergedConfigWithoutLoadPaths generatedLoadConfig;
       existingWorkspace = (((mergedConfig0.agents or { }).defaults or { }).workspace or null);
       mergedConfig =
         if (cfg.workspace.pinAgentDefaults or true) && existingWorkspace == null then
@@ -149,6 +170,8 @@ let
           }
         else
           mergedConfig0;
+      hasExecSecretFlow = containsExecSecretFlow mergedConfig;
+      execSecretFlowWarning = "programs.openclaw.instances.${name}.config uses OpenClaw exec secrets. nix-openclaw passes this through, but does not support or verify runtime command-based secret resolution. Prefer host-managed secrets with env/file SecretRefs: ${execSecretFlowDocsUrl}";
       qmdEnabled = (((mergedConfig.memory or { }).backend or null) == "qmd");
       gatewayRuntimePackage =
         if qmdEnabled && qmdPackage != null then
@@ -162,40 +185,16 @@ let
             OPENCLAW_GATEWAY_PACKAGE = "${gatewayPackage}";
             OPENCLAW_GATEWAY_BIN = "${gatewayPackage}/bin/openclaw";
             OPENCLAW_QMD_PATH = qmdPath;
-            installPhase = ''
-              runHook preInstall
-
-              if [ -z "''${OPENCLAW_GATEWAY_PACKAGE:-}" ]; then
-                echo "OPENCLAW_GATEWAY_PACKAGE is not set" >&2
-                exit 1
-              fi
-              if [ -z "''${OPENCLAW_GATEWAY_BIN:-}" ]; then
-                echo "OPENCLAW_GATEWAY_BIN is not set" >&2
-                exit 1
-              fi
-              if [ ! -x "$OPENCLAW_GATEWAY_BIN" ]; then
-                echo "OPENCLAW_GATEWAY_BIN is not executable: $OPENCLAW_GATEWAY_BIN" >&2
-                exit 1
-              fi
-              if [ -z "''${OPENCLAW_QMD_PATH:-}" ]; then
-                echo "OPENCLAW_QMD_PATH is not set" >&2
-                exit 1
-              fi
-
-              mkdir -p "$out/bin"
-              makeWrapper "$OPENCLAW_GATEWAY_BIN" "$out/bin/openclaw" \
-                --prefix PATH : "$OPENCLAW_QMD_PATH"
-
-              if [ -d "''${OPENCLAW_GATEWAY_PACKAGE}/Applications" ]; then
-                ln -s "''${OPENCLAW_GATEWAY_PACKAGE}/Applications" "$out/Applications"
-              fi
-
-              runHook postInstall
-            '';
+            STDENV_SETUP = "${pkgs.stdenvNoCC}/setup";
+            installPhase = "${../../../scripts/openclaw-qmd-wrapper-install.sh}";
           }
         else
           gatewayPackage;
-      configJson = builtins.toJSON mergedConfig;
+      configJson =
+        if hasExecSecretFlow then
+          lib.warn execSecretFlowWarning (builtins.toJSON mergedConfig)
+        else
+          builtins.toJSON mergedConfig;
       configFile = pkgs.writeText "openclaw-${name}.json" configJson;
       agentIds =
         let
@@ -417,11 +416,9 @@ in
       }
     '';
 
-    home.activation.openclawWorkspaceFiles = lib.mkIf (files.materializedEntries != [ ]) (
-      lib.hm.dag.entryAfter [ "openclawDirs" ] ''
-        run --quiet ${../openclaw-materialize-workspace-files.sh} ${lib.escapeShellArg "${homeDir}/.local/state/nix-openclaw/managed-workspace-files"} ${files.materializedManifest}
-      ''
-    );
+    home.activation.openclawWorkspaceFiles = lib.hm.dag.entryAfter [ "openclawDirs" ] ''
+      run --quiet ${../openclaw-materialize-workspace-files.sh} ${lib.escapeShellArg "${homeDir}/.local/state/nix-openclaw/managed-workspace-files"} ${files.materializedManifest}
+    '';
 
     home.activation.openclawConfigFiles = lib.hm.dag.entryAfter [ "openclawDirs" ] ''
       ${lib.concatStringsSep "\n" (

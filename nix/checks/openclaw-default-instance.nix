@@ -169,15 +169,54 @@ let
       { source = alphaPluginSource; }
     ];
   };
-  customPluginSkill = ".openclaw/workspace/skills/skill";
-  customPluginActivation = builtins.toJSON customPluginEval.config.home.activation.openclawWorkspaceFiles;
-  hasCustomPluginMaterializer = lib.hasInfix "openclaw-materialize-workspace-files" customPluginActivation;
-  customPluginCheck = builtins.deepSeq (requireNoAssertionFailures "customPlugins" customPluginEval) (
-    if hasCustomPluginMaterializer then
-      "ok"
-    else
-      throw "customPlugins did not wire workspace file materialization."
+  customPluginConfig = builtins.fromJSON (
+    builtins.unsafeDiscardStringContext customPluginEval.config.home.file.".openclaw/openclaw.json".text
   );
+  customPluginSkillExtraDirs = ((customPluginConfig.skills or { }).load or { }).extraDirs or [ ];
+  customPluginCheck = builtins.deepSeq (requireNoAssertionFailures "customPlugins" customPluginEval) (
+    if !(lib.any (path: lib.hasSuffix "/skill" path) customPluginSkillExtraDirs) then
+      throw "customPlugins did not wire plugin skills into skills.load.extraDirs."
+    else
+      "ok"
+  );
+
+  multiAgentPluginSkillEval = moduleEval {
+    customPlugins = [
+      { source = alphaPluginSource; }
+    ];
+    config.agents.list = [
+      {
+        id = "writer";
+        workspace = "/tmp/openclaw-writer-workspace";
+      }
+      {
+        id = "research";
+        workspace = "/tmp/openclaw-research-workspace";
+      }
+    ];
+  };
+  multiAgentPluginSkillConfig = builtins.fromJSON (
+    builtins.unsafeDiscardStringContext
+      multiAgentPluginSkillEval.config.home.file.".openclaw/openclaw.json".text
+  );
+  multiAgentPluginSkillExtraDirs = (
+    ((multiAgentPluginSkillConfig.skills or { }).load or { }).extraDirs or [ ]
+  );
+  multiAgentWorkspaces = map (agent: agent.workspace) (
+    ((multiAgentPluginSkillConfig.agents or { }).list or [ ])
+  );
+  multiAgentPluginSkillCheck =
+    builtins.deepSeq (requireNoAssertionFailures "multi-agent plugin skills" multiAgentPluginSkillEval)
+      (
+        if !(lib.elem "/tmp/openclaw-writer-workspace" multiAgentWorkspaces) then
+          throw "Multi-agent config lost writer workspace."
+        else if !(lib.elem "/tmp/openclaw-research-workspace" multiAgentWorkspaces) then
+          throw "Multi-agent config lost research workspace."
+        else if !(lib.any (path: lib.hasSuffix "/skill" path) multiAgentPluginSkillExtraDirs) then
+          throw "Custom plugin skill was not shared through skills.load.extraDirs for separate agent workspaces."
+        else
+          "ok"
+      );
 
   duplicateSkillEval = moduleEval {
     customPlugins = [
@@ -187,7 +226,7 @@ let
   };
   duplicateSkillCheck =
     requireAssertionFailure "duplicate plugin skills"
-      "Duplicate skill paths detected: ${customPluginSkill}"
+      "Duplicate Nix-managed skill names detected: programs.openclaw.instances.default: skill"
       duplicateSkillEval;
 
   userPluginSkillCollisionEval = moduleEval {
@@ -203,8 +242,35 @@ let
   };
   userPluginSkillCollisionCheck =
     requireAssertionFailure "user/plugin skill collision"
-      "Duplicate skill paths detected: ${customPluginSkill}"
+      "Duplicate Nix-managed skill names detected: programs.openclaw.instances.default: skill"
       userPluginSkillCollisionEval;
+
+  userSkillEval = moduleEval {
+    config.skills.load.extraDirs = [ "/tmp/user-skill-root" ];
+    skills = [
+      {
+        name = "inline-skill";
+        mode = "inline";
+        description = "Inline test skill";
+        body = "Use this test skill.";
+      }
+    ];
+  };
+  userSkillConfig = builtins.fromJSON (
+    builtins.unsafeDiscardStringContext userSkillEval.config.home.file.".openclaw/openclaw.json".text
+  );
+  userSkillExtraDirs = ((userSkillConfig.skills or { }).load or { }).extraDirs or [ ];
+  generatedUserSkillExtraDirs = lib.filter (path: path != "/tmp/user-skill-root") userSkillExtraDirs;
+  userSkillCheck = builtins.deepSeq (requireNoAssertionFailures "user skills" userSkillEval) (
+    if !(lib.elem "/tmp/user-skill-root" userSkillExtraDirs) then
+      throw "User skills.load.extraDirs entry was not preserved."
+    else if generatedUserSkillExtraDirs == [ ] then
+      throw "Nix-managed raw skill was not added to skills.load.extraDirs."
+    else if userSkillExtraDirs != generatedUserSkillExtraDirs ++ [ "/tmp/user-skill-root" ] then
+      throw "User skills.load.extraDirs entries should remain after Nix-managed skill dirs."
+    else
+      "ok"
+  );
 
   secretProviderEval = moduleEval {
     config.secrets.providers.test-file = {
@@ -225,6 +291,87 @@ let
           "ok"
         else
           throw "secrets.providers file variant missing from generated config."
+      );
+
+  secretRefPassthroughEval = moduleEval {
+    config = {
+      secrets.providers = {
+        aws_test = {
+          source = "exec";
+          command = "/usr/bin/aws";
+          args = [
+            "secretsmanager"
+            "get-secret-value"
+            "--secret-id"
+            "openclaw/groq"
+          ];
+          jsonOnly = false;
+        };
+        filemain = {
+          source = "file";
+          path = "/run/agenix/openclaw-secrets.json";
+          mode = "json";
+        };
+      };
+
+      models.providers = {
+        groq = {
+          baseUrl = "https://api.groq.com/openai/v1";
+          api = "openai-completions";
+          apiKey = {
+            source = "exec";
+            provider = "aws_test";
+            id = "value";
+          };
+          models = [
+            {
+              id = "llama-3.3-70b-versatile";
+              name = "Llama 3.3 70B";
+            }
+          ];
+        };
+        filebacked = {
+          baseUrl = "https://example.invalid/v1";
+          api = "openai-completions";
+          apiKey = {
+            source = "file";
+            provider = "filemain";
+            id = "/providers/filebacked/apiKey";
+          };
+          models = [
+            {
+              id = "test-model";
+              name = "Test model";
+            }
+          ];
+        };
+      };
+    };
+  };
+  secretRefPassthroughConfig =
+    builtins.fromJSON
+      secretRefPassthroughEval.config.home.file.".openclaw/openclaw.json".text;
+  secretRefGroqApiKey =
+    ((secretRefPassthroughConfig.models or { }).providers or { }).groq.apiKey or { };
+  secretRefFileApiKey =
+    ((secretRefPassthroughConfig.models or { }).providers or { }).filebacked.apiKey or { };
+  secretRefPassthroughCheck =
+    builtins.deepSeq (requireNoAssertionFailures "SecretRef passthrough" secretRefPassthroughEval)
+      (
+        if secretRefGroqApiKey.source != "exec" then
+          throw "models.providers.groq.apiKey exec SecretRef was not rendered unchanged."
+        else if secretRefGroqApiKey.provider != "aws_test" then
+          throw "models.providers.groq.apiKey exec SecretRef provider was not rendered unchanged."
+        else if secretRefGroqApiKey.id != "value" then
+          throw "models.providers.groq.apiKey exec SecretRef id was not rendered unchanged."
+        else if secretRefFileApiKey.source != "file" then
+          throw "models.providers.filebacked.apiKey file SecretRef was not rendered unchanged."
+        else if secretRefFileApiKey.provider != "filemain" then
+          throw "models.providers.filebacked.apiKey file SecretRef provider was not rendered unchanged."
+        else if secretRefFileApiKey.id != "/providers/filebacked/apiKey" then
+          throw "models.providers.filebacked.apiKey file SecretRef id was not rendered unchanged."
+        else
+          "ok"
       );
 
   qmdPrewarmEval = moduleEval {
@@ -250,6 +397,8 @@ let
     else
       throw "memory.backend = qmd did not add QMD to the internal OpenClaw runtime."
   );
+  qmdMemoryPackages = lib.filter packageHasQmd qmdMemoryEval.config.home.packages;
+  qmdMemoryPackage = if qmdMemoryPackages == [ ] then null else builtins.head qmdMemoryPackages;
 
   runtimeProfileEval = moduleEval {
     runtimePackages = [ pkgs.jq ];
@@ -379,9 +528,12 @@ let
   checkKey = builtins.deepSeq [
     defaultCheck
     customPluginCheck
+    multiAgentPluginSkillCheck
     duplicateSkillCheck
     userPluginSkillCollisionCheck
+    userSkillCheck
     secretProviderCheck
+    secretRefPassthroughCheck
     qmdPrewarmCheck
     qmdMemoryCheck
     runtimeProfileCheck
@@ -396,6 +548,8 @@ stdenv.mkDerivation {
   pname = "openclaw-default-instance";
   version = "1";
   dontUnpack = true;
+  # Evaluation alone missed installPhase regressions in the QMD wrapper.
+  nativeBuildInputs = lib.optional (qmdMemoryPackage != null) qmdMemoryPackage;
   env = {
     OPENCLAW_DEFAULT_INSTANCE = checkKey;
   };
