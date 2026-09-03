@@ -1,0 +1,268 @@
+---
+written_by: ai
+---
+
+# Changelog
+
+This changelog starts with the current pre-1.0 nix-openclaw Home Manager module
+API transition.
+Older repository history is available in git.
+
+## 2026-08-30
+
+### Fixed
+
+- Keep OpenClaw's private pnpm pins under `openclawPackages` so the default overlay no longer replaces Nixpkgs' pnpm for unrelated packages. Thanks @jerome-benoit (#116).
+- `openclaw-reload` now restarts the configured Home Manager launchd labels or
+  systemd user units instead of the old hardcoded `.nix` and `.nix-test`
+  labels.
+
+## 2026-06-06
+
+### Changed
+
+- Changed the stable `openclaw` / `openclaw-gateway` package path to build from
+  upstream's published npm package and shrinkwrap by default. Source/pnpm builds
+  remain available for explicit source overrides.
+- Updated stable pin automation to refresh the npm wrapper lockfile and
+  `gatewayNpmDepsHash` with each selected upstream source release.
+- Replaced the vague CI aggregate with named supported-surface proofs for
+  package artifacts, module render, source-override render, runtime smoke,
+  platform activation, runtime plugin catalog/host behavior, and QMD opt-in.
+- Removed the temporary dogfood package and check outputs from the public flake
+  surface.
+
+### Added
+
+- Added `programs.openclaw.runtimePluginSources` for locked,
+  Nix-reproducible npm and ClawHub runtime plugin artifacts. Generated
+  supported ids still use `programs.openclaw.runtimePlugins`.
+- Added shrinkwrap materialization for runtime plugins with npm dependencies.
+  Shrinkwrapped packages use `npmDepsHash`; plugins that bundle `node_modules`
+  remain supported.
+- Added `runtimePlugins` support for `acpx`, `codex`, `copilot`, `matrix`,
+  `memory-lancedb`, `tlon`, and `whatsapp`.
+
+## 2026-06-05
+
+### Highlights
+
+- The nix-openclaw Home Manager module now manages OpenClaw workspace bootstrap
+  files explicitly instead of reading a single `programs.openclaw.documents`
+  directory.
+- Baseline: packaged upstream OpenClaw `v2026.6.1`
+  (`2e08f0f4221f522b60423ed6ffd83427942b28de`).
+- Scope: this entry describes the nix-openclaw module/API migration only; it
+  does not claim later upstream OpenClaw tags or `main`.
+
+### Trace
+
+- nix-openclaw implementation commit:
+  `85ac5a06bc00a0bc48c8e9831979e5e8b13184ce`
+- Date written: 2026-06-05
+- Packaged upstream OpenClaw release:
+  `v2026.6.1` (`2e08f0f4221f522b60423ed6ffd83427942b28de`)
+
+### Breaking Changes
+
+#### nix-openclaw Shortcut Config Options Were Removed
+
+nix-openclaw no longer has separate Home Manager shortcut options for provider,
+channel, routing, or agent config. Put OpenClaw runtime config under
+`programs.openclaw.config` and `programs.openclaw.instances.<name>.config`,
+using the upstream OpenClaw config shape.
+
+This is a nix-openclaw module API break, not an upstream OpenClaw runtime parser
+change.
+
+This entry is included because this changelog is the migration ledger for
+current nix-openclaw Home Manager module breaks. The shortcut-option removal is
+not caused by the workspace-file change, but users and agents upgrading
+pre-1.0 nix-openclaw need one place to see every required config rewrite.
+
+Before:
+
+```nix
+programs.openclaw = {
+  providers.telegram = {
+    enable = true;
+    botTokenFile = "/run/agenix/telegram-bot-token";
+    allowFrom = [ 12345678 ];
+  };
+
+  providers.anthropic.apiKeyFile = "/run/agenix/anthropic-api-key";
+};
+```
+
+After:
+
+```nix
+programs.openclaw = {
+  environment.ANTHROPIC_API_KEY = "/run/agenix/anthropic-api-key";
+
+  config = {
+    channels.telegram = {
+      tokenFile = "/run/agenix/telegram-bot-token";
+      allowFrom = [ 12345678 ];
+    };
+
+    models.providers.anthropic.apiKey = {
+      source = "env";
+      provider = "default";
+      id = "ANTHROPIC_API_KEY";
+    };
+  };
+};
+```
+
+For named instances, put per-instance OpenClaw config under the instance.
+Top-level `programs.openclaw.config` is merged into every instance; instance
+config is the boundary for prod/test routing, credentials, and host-specific
+runtime settings:
+
+```nix
+programs.openclaw.instances.prod.config.channels.telegram = {
+  tokenFile = "/run/agenix/telegram-prod";
+  allowFrom = [ 12345678 ];
+};
+```
+
+#### `programs.openclaw.documents` Is Removed
+
+`programs.openclaw.documents` is removed and now fails evaluation. Replace it
+with explicit workspace bootstrap files and extra managed workspace files.
+
+The old option hid the ownership contract. One directory mixed upstream
+bootstrap context with arbitrary companion files, and other Nix modules could
+also write directly into the same workspace-like paths. That made deploy-time
+clobbering hard to reason about: the file owner depended on activation order and
+on whether a file happened to be copied through `documents` or written somewhere
+else. The new API is deliberately explicit so each Nix-managed workspace target
+has one declaration.
+
+Before:
+
+```nix
+programs.openclaw.documents = ./documents;
+```
+
+The old directory commonly looked like this:
+
+```text
+documents/
+|-- AGENTS.md
+|-- SOUL.md
+|-- TOOLS.md
+|-- IDENTITY.md
+|-- USER.md
+|-- LORE.md
+|-- PROMPTING-EXAMPLES.md
+`-- HEARTBEAT.md
+```
+
+After:
+
+```nix
+programs.openclaw.workspace.bootstrapFiles = {
+  agents = ./workspace/AGENTS.md;
+  soul = ./workspace/SOUL.md;
+  tools = ./workspace/TOOLS.md;
+  identity = ./workspace/IDENTITY.md;
+  user = ./workspace/USER.md;
+
+  # Set a path only if HEARTBEAT.md should be Nix-managed.
+  heartbeat = null;
+};
+
+programs.openclaw.workspace.files = {
+  "LORE.md" = ./workspace/LORE.md;
+  "PROMPTING-EXAMPLES.md" = ./workspace/PROMPTING-EXAMPLES.md;
+};
+```
+
+File mapping:
+
+| Old file | New declaration |
+| --- | --- |
+| `AGENTS.md` | `workspace.bootstrapFiles.agents` |
+| `SOUL.md` | `workspace.bootstrapFiles.soul` |
+| `TOOLS.md` | `workspace.bootstrapFiles.tools` |
+| `IDENTITY.md` | `workspace.bootstrapFiles.identity` |
+| `USER.md` | `workspace.bootstrapFiles.user` |
+| `HEARTBEAT.md` | `workspace.bootstrapFiles.heartbeat` if Nix-managed |
+| `LORE.md` | `workspace.files."LORE.md"` if Nix-managed |
+| `PROMPTING-EXAMPLES.md` | `workspace.files."PROMPTING-EXAMPLES.md"` if Nix-managed |
+| other companion docs | `workspace.files."<target path>"` if Nix-managed |
+| `BOOTSTRAP.md` | runtime-owned; do not declare |
+| `MEMORY.md` | runtime-owned; do not declare |
+| `memory/` | runtime-owned; do not declare |
+
+The old `documents` option required only `AGENTS.md`, `SOUL.md`, and
+`TOOLS.md`. The new `workspace.bootstrapFiles` option requires `AGENTS.md`,
+`SOUL.md`, `TOOLS.md`, `IDENTITY.md`, and `USER.md` when bootstrap files are
+enabled.
+
+Files from the old `documents` directory that are not re-declared under
+`workspace.bootstrapFiles` or `workspace.files` intentionally stop being
+managed by nix-openclaw.
+
+#### OpenClaw Bootstrap Seeding Is Disabled For Nix-Managed Workspaces
+
+When `workspace.bootstrapFiles` is set, nix-openclaw forces
+`agents.defaults.skipBootstrap = true`. Config that tries to set it to `false`
+now fails evaluation.
+
+Before:
+
+```nix
+programs.openclaw.config.agents.defaults.skipBootstrap = false;
+```
+
+After:
+
+```nix
+# Omit this setting. nix-openclaw sets it to true when workspace bootstrap files
+# are Nix-managed.
+```
+
+This prevents upstream OpenClaw from creating missing bootstrap files from
+bundled templates in a declarative install. If runtime bootstrap seeding stayed
+enabled, OpenClaw could create missing files such as `AGENTS.md`, `SOUL.md`, or
+`USER.md` during first run, then a later Nix activation could replace some of
+those files while leaving other runtime-created files behind. That recreates the
+same unclear ownership model this migration removes.
+
+#### Workspace File Ownership Is Explicit
+
+`workspace.files` manages only extra files below the workspace. It rejects:
+
+- bootstrap file targets such as `AGENTS.md`, `SOUL.md`, `TOOLS.md`,
+  `IDENTITY.md`, `USER.md`, and `HEARTBEAT.md`
+- runtime-owned targets such as `BOOTSTRAP.md`, `MEMORY.md`, `memory`, and
+  `memory/...`
+- absolute paths, parent-directory escapes, empty path segments, `.` or `..`
+  path segments, trailing slashes, tabs, and newlines
+
+If a deployment had separate `home.file` writers for files inside the same
+OpenClaw workspace, migrate those files into `workspace.bootstrapFiles` or
+`workspace.files` so there is one declarative owner.
+
+Public and private modules can split ownership field-by-field. This lets a
+public nix repo publish reusable default context while a private nix repo adds
+`USER.md`, host-specific identity, or private companion files without copying
+the public module or leaking private context:
+
+```nix
+# Public module.
+programs.openclaw.workspace.bootstrapFiles = {
+  agents = ./workspace/AGENTS.md;
+  soul = ./workspace/SOUL.md;
+  tools = ./workspace/TOOLS.md;
+  identity = ./workspace/IDENTITY.md;
+};
+
+programs.openclaw.workspace.files."LORE.md" = ./workspace/LORE.md;
+
+# Private module.
+programs.openclaw.workspace.bootstrapFiles.user = ./workspace/USER.md;
+```

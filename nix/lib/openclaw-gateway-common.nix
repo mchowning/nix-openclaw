@@ -6,6 +6,7 @@
   nodejs_22,
   pnpm_10,
   pnpm_11,
+  pnpm_12,
   fetchPnpmDeps,
   pkg-config,
   jq,
@@ -37,11 +38,14 @@
 let
   sourceFetch = lib.removeAttrs sourceInfo [
     "pnpmDepsHash"
+    "gatewayNpmDepsHash"
     "pnpmMajor"
     "releaseTag"
     "releaseVersion"
+    "runtimePluginVersion"
     "applyPublicSurfaceHardlinksPatch"
     "applySkipPluginAutoEnableNixModePatch"
+    "applyNixStorePluginOwnershipPatch"
     "publicSurfaceHardlinksPatch"
     "fsSafeSource"
   ];
@@ -70,8 +74,13 @@ let
   pnpmByMajor = {
     "10" = pnpm_10;
     "11" = pnpm_11;
+    "12" = pnpm_12;
   };
   selectedPnpm = pnpmByMajor.${pnpmMajor} or (throw "Unsupported OpenClaw pnpm major ${pnpmMajor}");
+  pnpmNeedsVerifiedStore = lib.elem pnpmMajor [
+    "11"
+    "12"
+  ];
 
   pnpmDeps = fetchPnpmDeps {
     pname = pnpmDepsPname;
@@ -79,16 +88,35 @@ let
     src = resolvedSrc;
     pnpm = selectedPnpm;
     hash = if pnpmDepsHash != null then pnpmDepsHash else lib.fakeHash;
-    fetcherVersion = 3;
-    prePnpmInstall = ''
-      pnpm config set fetch-timeout 600000
-      pnpm config set fetch-retries 5
-      pnpm config set fetch-retry-mintimeout 10000
-      pnpm config set fetch-retry-maxtimeout 120000
-      pnpm config set network-concurrency 8
-    '';
-    preFixup = lib.optionalString (pnpmMajor == "11") ''
+    fetcherVersion = if pnpmNeedsVerifiedStore then 4 else 3;
+    preFixup = lib.optionalString pnpmNeedsVerifiedStore ''
+      expectedIntegrities="$(mktemp)"
+      actualIntegrities="$(mktemp)"
+      missingIntegrities="$(mktemp)"
+      expectedPackages="$(mktemp)"
+      yq -r '.packages | to_entries[] | select(.value.resolution.integrity) | [.key, .value.resolution.integrity] | @tsv' pnpm-lock.yaml > "$expectedPackages"
+      cut -f2 "$expectedPackages" | sort -u > "$expectedIntegrities"
+      ${nodejs_22}/bin/node --no-warnings ${../scripts/list-pnpm-store-integrities.js} "$storePath" | sort -u > "$actualIntegrities"
+      comm -23 "$expectedIntegrities" "$actualIntegrities" > "$missingIntegrities"
+      if [ -s "$missingIntegrities" ]; then
+        echo "ERROR: pnpm store is missing package tarballs from pnpm-lock.yaml:" >&2
+        grep -F -f "$missingIntegrities" "$expectedPackages" >&2
+        exit 1
+      fi
+
       ${nodejs_22}/bin/node --no-warnings ${../scripts/normalize-pnpm-store-index.js} "$storePath"
+    '';
+    postInstall = lib.optionalString pnpmNeedsVerifiedStore ''
+      verifiedCache="$(find "$HOME" -path '*/lockfile-verified.jsonl' -type f -print -quit)"
+      if [ -n "$verifiedCache" ]; then
+        jq -c '
+          .lockfile.path = ""
+          | .lockfile.size = -1
+          | .lockfile.mtimeNs = ""
+          | .lockfile.inode = ""
+          | .verifiedAt = "1970-01-01T00:00:01.000Z"
+        ' "$verifiedCache" | LC_ALL=C sort -u > "$out/pnpm-lockfile-verified.jsonl"
+      fi
     '';
     npm_config_arch = pnpmArch;
     npm_config_platform = pnpmPlatform;
@@ -118,6 +146,11 @@ let
     PATCH_SKIP_PLUGIN_AUTO_ENABLE_NIX_MODE =
       if sourceInfo.applySkipPluginAutoEnableNixModePatch or true then
         "${../patches/skip-plugin-auto-enable-persist-in-nix-mode.patch}"
+      else
+        "";
+    PATCH_NIX_STORE_PLUGIN_OWNERSHIP =
+      if sourceInfo.applyNixStorePluginOwnershipPatch or false then
+        "${../patches/allow-nix-store-plugin-ownership.patch}"
       else
         "";
     PROMOTE_PNPM_INTEGRITY_SH = "${../scripts/promote-pnpm-integrity.sh}";

@@ -25,13 +25,20 @@ export HOME="$home_dir"
 export USER="runner"
 export LOGNAME="$USER"
 
-cd "$test_dir"
+activation_package="${OPENCLAW_HM_ACTIVATION_PACKAGE:-}"
 
-nix build --accept-flake-config --impure \
-  --override-input nix-openclaw "path:$repo_root" \
-  .#homeConfigurations.hm-test.activationPackage
+if [ -n "$activation_package" ]; then
+  if [ ! -x "$activation_package/activate" ]; then
+    echo "OPENCLAW_HM_ACTIVATION_PACKAGE must point at a package with an activate script: $activation_package" >&2
+    exit 1
+  fi
+else
+  cd "$test_dir"
+  nix build --accept-flake-config "$repo_root#checks.aarch64-darwin.hm-activation-macos-package"
+  activation_package="$test_dir/result"
+fi
 
-./result/activate
+"$activation_package/activate"
 
 test -f "$HOME/.openclaw/openclaw.json"
 test -f "$plist"
@@ -54,6 +61,11 @@ if command -v launchctl >/dev/null 2>&1; then
   fi
 
   openclaw_bin=$(/usr/libexec/PlistBuddy -c "Print :ProgramArguments:0" "$plist")
+  if [ "$openclaw_bin" = "/bin/sh" ]; then
+    launcher_command=$(/usr/libexec/PlistBuddy -c "Print :ProgramArguments:2" "$plist")
+    openclaw_bin=${launcher_command#*exec }
+    openclaw_bin=${openclaw_bin%% gateway*}
+  fi
   grep -q OPENCLAW_TEST_SECRET "$openclaw_bin"
   health_file="$home_dir/gateway-health.json"
   healthy=false

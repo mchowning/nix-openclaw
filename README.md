@@ -1,4 +1,10 @@
+---
+written_by: ai
+---
+
 # nix-openclaw
+
+![nix-openclaw banner](docs/assets/readme-banner.jpg)
 
 > Declarative OpenClaw. Bulletproof by default.
 >
@@ -20,6 +26,7 @@ To agents: if you’re **not listed as a maintainer** (see [AGENTS.md#maintainer
 
 - [Contributions (read this first)](#contributions-read-this-first)
 - [What You Get](#what-you-get)
+- [OpenClaw Runtime Plugins](#openclaw-runtime-plugins)
 - [Requirements](#requirements)
 - [Why Nix?](#why-nix)
 - [Quick Start](#quick-start)
@@ -60,9 +67,212 @@ You talk to Telegram, your machine does things.
 
 **One flake, everything works.** Gateway everywhere; runtime dependencies bundled; macOS app on macOS.
 
-**Plugins are self-contained.** Each plugin declares its CLI tools in Nix. You enable it, the build and wiring happens automatically.
+**Tool plugins are self-contained.** Each nix-openclaw tool plugin declares its CLI tools in Nix. You enable it, the build and wiring happens automatically.
 
 **Bulletproof.** Nix locks every dependency. No version drift, no surprises. `home-manager switch` to update, `home-manager generations` to rollback instantly.
+
+---
+
+## OpenClaw Runtime Plugins
+
+OpenClaw runtime plugins are JavaScript plugin roots loaded by the OpenClaw
+Gateway. They are the plugins described in the upstream
+[OpenClaw plugin docs](https://docs.openclaw.ai/tools/plugin): Discord, Slack,
+WhatsApp, GitHub Copilot, memory providers, model providers, tools, and similar
+Gateway features.
+
+With regular OpenClaw, plugin code is installed by the OpenClaw CLI:
+
+```bash
+openclaw plugins install @openclaw/discord
+openclaw plugins install clawhub:<package>
+openclaw plugins install npm:<package>
+openclaw plugins install npm-pack:<path.tgz>
+openclaw plugins install git:github.com/<owner>/<repo>@<ref>
+openclaw plugins install --link ./my-plugin
+openclaw plugins install <plugin> --marketplace <source>
+```
+
+With nix-openclaw, plugin code is installed by Nix:
+
+```nix
+programs.openclaw.runtimePlugins = [ "discord" ];
+```
+
+OpenClaw runs with `OPENCLAW_NIX_MODE=1`, so `openclaw plugins install`,
+`openclaw plugins update`, `openclaw plugins uninstall`,
+`openclaw plugins enable`, and `openclaw plugins disable` fail instead of
+mutating `~/.openclaw`. Change your Nix config and rebuild.
+
+### Schemes
+
+Use these inputs:
+
+| Regular OpenClaw command or source | nix-openclaw |
+| --- | --- |
+| Already included in OpenClaw | Configure it directly under `programs.openclaw.config`; no install input is needed. |
+| `openclaw plugins install @openclaw/discord` | `programs.openclaw.runtimePlugins = [ "discord" ];` |
+| `openclaw plugins install npm:@openclaw/copilot@2026.6.1` | `programs.openclaw.runtimePluginSources = [{ id = "copilot"; spec = "npm:@openclaw/copilot@2026.6.1"; }];` |
+| `openclaw plugins install clawhub:@openclaw/whatsapp@2026.6.1` | `programs.openclaw.runtimePluginSources = [{ id = "whatsapp"; spec = "clawhub:@openclaw/whatsapp@2026.6.1"; }];` |
+| Fixed HTTPS npm-pack `.tgz` artifact | `programs.openclaw.runtimePluginSources = [{ id = "my-plugin"; url = "https://.../plugin-1.2.3.tgz"; }];` |
+| `git:`, local path, or marketplace install | Not a direct `runtimePluginSources` input today. Package the plugin as a fixed Nix source or use raw `plugins.load.paths`, below. |
+
+The `id` is the OpenClaw plugin id from `openclaw.plugin.json`. It must match
+the package you fetch.
+
+Start with the upstream
+[Plugin inventory](https://docs.openclaw.ai/plugins/plugin-inventory). For
+official plugin ids, check this build's supported list:
+
+```bash
+jq -r '.supported[] | "\(.id)\t\(.label)\t\(.selectedSource)\t\(.dependencyMode)"' \
+  nix/generated/openclaw-runtime-plugins/report.json
+```
+
+`runtimePlugins` uses plugin ids such as `discord`, `whatsapp`, `googlechat`,
+`msteams`, or `copilot`, not npm package names such as `@openclaw/discord`.
+Do not put bare package names or unprefixed `@scope/package` strings in
+`runtimePluginSources`; use exact `npm:` or `clawhub:` specs.
+
+### Dependency Rule
+
+The rule is simple: if a plugin has runtime npm dependencies, it must publish
+either bundled `node_modules` or `npm-shrinkwrap.json`. No bundled deps and no
+shrinkwrap means no Nix package.
+
+Regular OpenClaw can solve npm dependencies during `openclaw plugins install`.
+nix-openclaw cannot do a mutable dependency solve during `home-manager switch`.
+If a package has `npm-shrinkwrap.json`, nix-openclaw can replay that dependency
+graph with `npmDepsHash`. If it bundles `node_modules`, nix-openclaw validates
+and copies the bundled deps. If it has neither, ask the plugin author to publish
+shrinkwrap or bundled runtime deps.
+
+### npm and ClawHub Sources
+
+Use `runtimePluginSources` when the plugin is not in the supported
+`runtimePlugins` list, or when you want to pin a specific npm or ClawHub package
+yourself. If the id is already in the supported list, prefer `runtimePlugins`
+unless you intentionally want to override the selected source.
+
+```nix
+programs.openclaw.runtimePluginSources = [
+  {
+    id = "copilot";
+    spec = "npm:@openclaw/copilot@2026.6.1";
+  }
+  {
+    id = "whatsapp";
+    spec = "clawhub:@openclaw/whatsapp@2026.6.1";
+  }
+];
+```
+
+Build once. Nix will fail with the real source hash. Paste it back:
+
+```nix
+programs.openclaw.runtimePluginSources = [
+  {
+    id = "copilot";
+    spec = "npm:@openclaw/copilot@2026.6.1";
+    hash = "sha256-...";
+  }
+];
+```
+
+If the package has runtime dependencies, does not bundle them, and publishes
+`npm-shrinkwrap.json`, the next build asks for `npmDepsHash`:
+
+```nix
+programs.openclaw.runtimePluginSources = [
+  {
+    id = "copilot";
+    spec = "npm:@openclaw/copilot@2026.6.1";
+    hash = "sha256-...";
+    npmDepsHash = lib.fakeHash;
+  }
+];
+```
+
+Build again and replace `npmDepsHash` with the suggested hash. Specs must use
+exact `N.N` or `N.N.N` versions, with an optional prerelease suffix. Do not use
+`latest`, dist-tags, version ranges, or build metadata in Nix config. Local
+`npm-pack:<path.tgz>` tarballs are not direct `runtimePluginSources` inputs;
+publish or fetch a fixed HTTPS `.tgz`, then use `url`, or wire a prebuilt
+plugin root yourself with `plugins.load.paths`.
+
+### Configuration Example
+
+Channel plugins add places where messages can enter and leave OpenClaw. That
+means there are two parts: load the plugin, then configure the channel account.
+
+Upstream OpenClaw:
+
+```bash
+openclaw plugins install @openclaw/discord
+```
+
+Then configure the channel in `openclaw.json`:
+
+```json5
+{
+  channels: {
+    discord: {
+      enabled: true,
+      token: "your-bot-token",
+    },
+  },
+}
+```
+
+See OpenClaw's
+[channel configuration docs](https://docs.openclaw.ai/gateway/config-channels)
+for the full `channels.*` shape.
+
+nix-openclaw:
+
+```nix
+programs.openclaw = {
+  runtimePlugins = [ "discord" ];
+
+  environment = {
+    DISCORD_BOT_TOKEN = "/run/agenix/discord-bot-token";
+  };
+
+  config.channels.discord = {
+    enabled = true;
+    token = { source = "env"; provider = "default"; id = "DISCORD_BOT_TOKEN"; };
+  };
+};
+```
+
+Use the same pattern for Slack, WhatsApp, Google Chat, Microsoft Teams, and
+other channel plugins. Non-channel plugins still use the same install inputs,
+but their settings go wherever the upstream plugin docs say. For example, a
+model/runtime plugin usually configures `agents.*`, `models.*`, or
+`plugins.entries.<id>.config` instead of `channels.*`.
+
+### Lower-Level Paths
+
+These paths are still supported, but most users should start above:
+
+| Path | Use when |
+| --- | --- |
+| `programs.openclaw.config.plugins.entries.<id>` | The plugin already ships inside OpenClaw and only needs upstream config or enablement. |
+| `programs.openclaw.config.plugins.load.paths` | You already have a fixed plugin root and want to wire it yourself. Do not mix this with `runtimePlugins` or `runtimePluginSources` in the same instance. |
+| `programs.openclaw.bundledPlugins` / `programs.openclaw.customPlugins` | You are installing nix-openclaw tool plugins: Nix flake bundles that add CLI tools or agent skills. See [Plugins](#plugins). |
+
+Raw `plugins.load.paths` is an OpenClaw config escape hatch. nix-openclaw will
+render it, but it will not fetch npm dependencies, resolve ClawHub, validate
+hashes, or write plugin install records for you.
+
+Example:
+
+```nix
+programs.openclaw.config.plugins = {
+  load.paths = [ "/nix/store/...-my-plugin" ];
+  entries.my-plugin.enabled = true;
+};
+```
 
 ---
 
@@ -137,10 +347,12 @@ What nix-openclaw is:
 
 What I need you to do:
 1. Inspect my OS, CPU architecture, shell, Home Manager setup, and whether Nix with flakes is installed
-2. Ask me only for missing choices: channel, bot/account secrets, allowed users, provider keys, and documents/identity preferences
+2. Ask me only for missing choices: channel, bot/account secrets, allowed users, provider keys, and workspace identity preferences
 3. Create a local flake at ~/code/openclaw-local using templates/agent-first/flake.nix
-4. Create a docs dir next to the config (e.g., ~/code/openclaw-local/documents) with AGENTS.md, SOUL.md, TOOLS.md (optional: IDENTITY.md, USER.md, LORE.md, HEARTBEAT.md, PROMPTING-EXAMPLES.md)
-   - If ~/.openclaw/workspace already has these files, adopt them into the documents dir first (use copy/rsync that dereferences symlinks, e.g. `cp -L`)
+4. Create explicit workspace bootstrap files next to the config (e.g., ~/code/openclaw-local/workspace): AGENTS.md, SOUL.md, TOOLS.md, IDENTITY.md, USER.md
+   - Optional Nix-managed workspace files can live next to them, e.g. LORE.md or PROMPTING-EXAMPLES.md
+   - HEARTBEAT.md is managed only if you explicitly set `workspace.bootstrapFiles.heartbeat`
+   - If ~/.openclaw/workspace already has files you want to keep, adopt them into the flake first (use copy/rsync that dereferences symlinks, e.g. `cp -L`)
 5. Help me create or connect the channel account I choose
 6. Set up secrets (bot token, provider key) - plain files at ~/.secrets/ are fine unless I already have a secret manager
 7. Ask whether I want local memory through QMD; if yes, set `memory.backend = "qmd"` in OpenClaw config
@@ -166,8 +378,8 @@ reason to diverge.
 **What happens next:**
 1. Your agent sets everything up and runs `home-manager switch`
 2. You message your Telegram bot for the first time
-3. OpenClaw runs its **bootstrap ritual** - it asks you playful questions: *"Who am I? What am I? Who are you?"* - to learn its identity and yours
-4. Once you've named it and introduced yourself, the bootstrap is done. You're up and running.
+3. OpenClaw starts with the workspace context declared in your flake
+4. To change identity or operating context later, edit the source files and run Home Manager again
 
 <details>
 <summary><strong>Option 2: Manual setup</strong></summary>
@@ -183,8 +395,10 @@ reason to diverge.
 3. Edit `flake.nix` placeholders:
    - `system` = `aarch64-darwin`
    - `home.username` and `home.homeDirectory`
-   - `programs.openclaw.documents` with `AGENTS.md`, `SOUL.md`, `TOOLS.md` (optional: `IDENTITY.md`, `USER.md`, `LORE.md`, `HEARTBEAT.md`, `PROMPTING-EXAMPLES.md`)
-     - Keep this directory inside the flake, or make sure the Nix daemon can read it and traverse every parent directory.
+   - `programs.openclaw.workspace.bootstrapFiles` with explicit paths for `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, and `USER.md`
+     - Set `heartbeat = ./workspace/HEARTBEAT.md` only if you want Nix to manage `HEARTBEAT.md`
+     - Put non-bootstrap workspace files in `programs.openclaw.workspace.files`, e.g. `files."LORE.md" = ./workspace/LORE.md`
+     - Keep these files inside the flake, or make sure the Nix daemon can read them and traverse every parent directory.
    - Provider secrets (Telegram/Discord tokens, Anthropic API key)
 4. Apply:
    ```bash
@@ -206,8 +420,10 @@ reason to diverge.
 3. Edit `flake.nix` placeholders:
    - `system` = `x86_64-linux`
    - `home.username` and `home.homeDirectory` (e.g., `/home/<user>`)
-   - `programs.openclaw.documents` with `AGENTS.md`, `SOUL.md`, `TOOLS.md` (optional: `IDENTITY.md`, `USER.md`, `LORE.md`, `HEARTBEAT.md`, `PROMPTING-EXAMPLES.md`)
-     - Keep this directory inside the flake, or make sure the Nix daemon can read it and traverse every parent directory.
+   - `programs.openclaw.workspace.bootstrapFiles` with explicit paths for `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, and `USER.md`
+     - Set `heartbeat = ./workspace/HEARTBEAT.md` only if you want Nix to manage `HEARTBEAT.md`
+     - Put non-bootstrap workspace files in `programs.openclaw.workspace.files`, e.g. `files."LORE.md" = ./workspace/LORE.md`
+     - Keep these files inside the flake, or make sure the Nix daemon can read them and traverse every parent directory.
    - Provider secrets (Telegram/Discord tokens, Anthropic API key)
 4. Apply:
    ```bash
@@ -231,11 +447,11 @@ You (Telegram/Discord) --> Gateway --> Tools --> Your machine does things
 
 **Gateway**: The brain. A service running on your machine that receives messages and decides what to do. Managed by launchd on macOS and a systemd user service on Linux.
 
-**Plugins**: Bundles that contain two things:
+**nix-openclaw plugins**: Nix-managed bundles that contain two things:
 1. **CLI tools** - actual programs that do stuff (take screenshots, control Spotify, transcribe audio)
 2. **Skills** - markdown files that teach the AI *how* to use those tools
 
-When you enable a plugin, Nix installs the tools and wires up the skills to OpenClaw automatically - the gateway learns what it can do.
+When you enable a nix-openclaw plugin, Nix installs the tools and wires up the skills to OpenClaw automatically - the gateway learns what it can do.
 
 **Skills**: Instructions for the AI. A skill file says "when the user wants X, run this command." The AI reads these to know what it can do.
 
@@ -245,11 +461,11 @@ When you enable a plugin, Nix installs the tools and wires up the skills to Open
 When you run `home-manager switch`:
 
 1. Nix reads your `flake.nix` and resolves all plugin sources (GitHub repos, local paths)
-2. For each plugin, Nix looks for a `openclawPlugin` output that declares:
+2. For each nix-openclaw plugin, Nix looks for a `openclawPlugin` output that declares:
    - What CLI packages to install
-   - What skill files to copy
+   - What skill directories to expose
    - What environment variables it needs
-3. Tools go on your PATH, skills get symlinked to `~/.openclaw/workspace/skills/`
+3. Tools go on the gateway PATH, skills are added to OpenClaw's `skills.load.extraDirs`
 4. A launchd (macOS) or systemd user service (Linux) is created/updated to run the gateway
 5. The gateway starts, loads skills, connects to your providers
 
@@ -263,11 +479,11 @@ All state lives in `~/.openclaw/`. Logs at `/tmp/openclaw/openclaw-gateway.log`.
 
 > **Note:** Complete the [Quick Start](#quick-start) first to get OpenClaw running. Then come back here to add plugins.
 
-Plugins extend what OpenClaw can do. Each plugin bundles tools and teaches the AI how to use them.
+These docs are for nix-openclaw tool plugins only. For OpenClaw runtime plugins such as Slack or Discord, use `programs.openclaw.runtimePlugins`; see [OpenClaw Runtime Plugins](#openclaw-runtime-plugins).
 
 ### Bundled plugins
 
-These ship with nix-openclaw. Catalog source of truth: `nix/modules/home-manager/openclaw/plugin-catalog.nix`.
+These ship with nix-openclaw.
 Toggle them in your config:
 
 ```nix
@@ -279,7 +495,7 @@ programs.openclaw.bundledPlugins = {
   poltergeist.enable = false; # File watching and automation
   sag.enable = false;        # Text-to-speech
   camsnap.enable = false;    # Camera snapshots
-  gogcli.enable = false;     # Google Calendar
+  gogcli.enable = false;     # Google Workspace CLI
   goplaces.enable = true;    # Google Places API
   sonoscli.enable = false;   # Sonos control
   imsg.enable = false;       # iMessage
@@ -301,12 +517,40 @@ programs.openclaw.bundledPlugins.goplaces = {
 | `poltergeist` | File watching and automation |
 | `sag` | Text-to-speech |
 | `camsnap` | Take photos from connected cameras |
-| `gogcli` | Google Calendar integration |
+| `gogcli` | Google Workspace CLI |
 | `goplaces` | Google Places API (New) CLI |
 | `sonoscli` | Control Sonos speakers |
 | `imsg` | Send/read iMessages |
 
-### Adding community plugins
+#### Gmail hooks with gogcli
+
+Enabling `bundledPlugins.gogcli` installs `gog` and its OpenClaw skill. It does
+not run `openclaw hooks gmail setup` or mutate the Nix-owned `openclaw.json`.
+Declare the upstream Gmail hook configuration under
+`programs.openclaw.config.hooks` instead.
+
+The Gmail preset uses a templated `hook:gmail:` session key. OpenClaw rejects
+that callback with HTTP 400 unless request session keys are enabled and bounded
+to the expected prefix:
+
+```nix
+programs.openclaw.config.hooks = {
+  enabled = true;
+  presets = [ "gmail" ];
+  defaultSessionKey = "hook:gmail:default";
+  allowRequestSessionKey = true;
+  allowedSessionKeyPrefixes = [ "hook:gmail:" ];
+
+  # Add the upstream gmail block here.
+};
+```
+
+Keep the prefix narrow: this option lets the authenticated hook caller select
+the target session. Follow the upstream
+[Gmail Pub/Sub setup](https://docs.openclaw.ai/automation/cron-jobs#gmail-pubsub-integration)
+for Google credentials, hook tokens, and public-ingress security.
+
+### Adding custom nix-openclaw plugins
 
 Tell your agent: *"Add the plugin from github:owner/repo-name and pin it."*
 
@@ -320,26 +564,9 @@ customPlugins = [
 
 Then run `home-manager switch` to install.
 
-For an OpenClaw native plugin published to npm, keep the source shape close to
-OpenClaw's own install command and let Nix build the immutable plugin root:
-
-```nix
-customPlugins = [
-  {
-    source = "npm:@scope/openclaw-plugin@1.2.3";
-    id = "openclaw-plugin";
-    hash = lib.fakeHash; # replace with the sha256 Nix reports
-  }
-];
-```
-
-Use this for OpenClaw runtime plugins with `openclaw.plugin.json` /
-`package.json.openclaw`. It does not run npm at gateway startup; Nix builds and
-caches the plugin root, then adds it to OpenClaw's `plugins.load.paths`.
-
 ### Plugins with configuration
 
-Some plugins need settings (auth files, preferences). Here's a simplified example:
+Some nix-openclaw plugins need settings (auth files, preferences). Here's a simplified example:
 
 ```nix
 # Example: a padel court booking plugin (simplified for illustration)
@@ -365,7 +592,7 @@ customPlugins = [
 <details>
 <summary><strong>For plugin developers</strong></summary>
 
-Want to make your tool available as a OpenClaw plugin? Here's the contract.
+Want to make your tool available as a nix-openclaw plugin? Here's the contract.
 
 **Minimum structure:**
 
@@ -413,10 +640,10 @@ See `examples/hello-world-plugin` for a complete working example.
 
 ---
 
-**Full plugin authoring prompt** - paste this to your AI agent to make any repo nix-openclaw-native:
+**Full plugin authoring prompt** - paste this to your AI agent to make any repo a nix-openclaw plugin:
 
 ```text
-Goal: Make this repo a nix-openclaw-native plugin with the standard contract.
+Goal: Make this repo a nix-openclaw plugin with the standard contract.
 
 Contract to implement:
 1) Add openclawPlugin output in flake.nix:
@@ -487,7 +714,13 @@ Deliverables: flake output, env overrides, AGENTS.md, skill update.
 
 > **Note:** You probably don't need to write this yourself. Your AI agent handles this when you use the [Quick Start](#quick-start) copypasta. These examples are here for reference.
 >
-> **Breaking change:** Nix now only emits config from `programs.openclaw.config` / `instances.<name>.config` (schema-typed). Legacy provider/routing/agent options are removed.
+> **Breaking change:** nix-openclaw no longer exposes provider/routing/agent shortcut options. Put OpenClaw runtime config under `programs.openclaw.config` / `instances.<name>.config`, using the upstream OpenClaw config shape.
+>
+> **Breaking change:** `programs.openclaw.documents` is removed. Use `programs.openclaw.workspace.bootstrapFiles` with explicit file paths for `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, and `USER.md`; use `programs.openclaw.workspace.files` for extra managed workspace files.
+> When migrating from `documents`, re-declare every old extra file you still want Nix-managed, e.g. `LORE.md`, `PROMPTING-EXAMPLES.md`, or private companion docs. Files not declared under `workspace.bootstrapFiles` or `workspace.files` intentionally stop being managed by nix-openclaw.
+> See [CHANGELOG.md](CHANGELOG.md) for all current breaking changes, before/after config, and file mapping.
+> When bootstrap files are configured, nix-openclaw forces `agents.defaults.skipBootstrap = true` so OpenClaw never seeds workspace bootstrap files from bundled templates.
+> `BOOTSTRAP.md` and `MEMORY.md` are runtime-owned, not managed by `workspace.files`.
 
 ### What OpenClaw needs (minimum)
 
@@ -497,6 +730,64 @@ Deliverables: flake output, env overrides, AGENTS.md, skill update.
 4. **Provider API keys** - set via environment (e.g., `ANTHROPIC_API_KEY`) or `config.env.vars` (avoid secrets in store)
 
 That's it. Everything else has sensible defaults.
+
+### Secrets And OpenClaw Exec SecretRefs
+
+nix-openclaw is part of the OpenClaw org and renders upstream OpenClaw config, including OpenClaw SecretRefs. The supported nix-openclaw secret path is still Nix-shaped: materialize secrets outside the Nix store, then pass them to OpenClaw as env/file-backed runtime config.
+
+Good:
+
+```nix
+programs.openclaw.environment.GROQ_API_KEY =
+  config.age.secrets.openclaw-groq-api-key.path;
+
+programs.openclaw.config.models.providers.groq.apiKey = {
+  source = "env";
+  provider = "default";
+  id = "GROQ_API_KEY";
+};
+```
+
+Same shape with sops-nix:
+
+```nix
+programs.openclaw.environment.GROQ_API_KEY =
+  config.sops.secrets.openclaw-groq-api-key.path;
+```
+
+You can do this, but you should not:
+
+```nix
+programs.openclaw.config.secrets.providers.aws = {
+  source = "exec";
+  command = "/run/current-system/sw/bin/aws";
+  args = [ "secretsmanager" "get-secret-value" "--secret-id" "openclaw/groq-api-key" ];
+};
+
+programs.openclaw.config.models.providers.groq.apiKey = {
+  source = "exec";
+  provider = "aws";
+  id = "value";
+};
+```
+
+nix-openclaw will render this because upstream OpenClaw supports it. That is pass-through compatibility, not support, and nix-openclaw emits a Nix warning when it sees this shape. Exec SecretRefs move secret retrieval into OpenClaw runtime config, where Nix cannot evaluate it, build-check it, order it, permission it, reproduce it, or verify IAM/session/network/output failure modes. It also makes the OpenClaw process responsible for secret fetching instead of the host service layer that normally owns startup ordering, identity, logs, retries, and file permissions.
+
+Better for AWS Secrets Manager, 1Password, Vault, etc.: have the host fetch the secret into a runtime-only file, then wire OpenClaw to that file/env value.
+
+```nix
+# Your systemd/launchd/host config writes this before OpenClaw starts.
+programs.openclaw.environment.GROQ_API_KEY =
+  "/run/openclaw-secrets/groq-api-key";
+
+programs.openclaw.config.models.providers.groq.apiKey = {
+  source = "env";
+  provider = "default";
+  id = "GROQ_API_KEY";
+};
+```
+
+That keeps nix-openclaw responsible for stable config and service wiring, keeps secrets out of the Nix store, and leaves dynamic secret-manager integration to the host layer that owns credentials and runtime side effects.
 
 ### Minimal config (single instance)
 
@@ -534,7 +825,14 @@ Uses `instances.default` to unlock per-group mention rules. If `instances` is se
 ```nix
 {
   programs.openclaw = {
-    documents = ./documents;
+    workspace.bootstrapFiles = {
+      agents = ./workspace/AGENTS.md;
+      soul = ./workspace/SOUL.md;
+      tools = ./workspace/TOOLS.md;
+      identity = ./workspace/IDENTITY.md;
+      user = ./workspace/USER.md;
+    };
+
     config = {
       gateway = {
         mode = "local";
@@ -604,7 +902,16 @@ Use named instances when you need two local gateways. Keep the default package u
 
 ```nix
 programs.openclaw = {
-  documents = ./documents;
+  workspace = {
+    bootstrapFiles = {
+      agents = ./workspace/AGENTS.md;
+      soul = ./workspace/SOUL.md;
+      tools = ./workspace/TOOLS.md;
+      identity = ./workspace/IDENTITY.md;
+      user = ./workspace/USER.md;
+    };
+    files."LORE.md" = ./workspace/LORE.md;
+  };
 
   instances = {
     prod = {
@@ -651,9 +958,9 @@ The gateway tracks the newest upstream stable OpenClaw source release that satis
 - gateway builds on Linux and macOS
 - gateway starts and answers local health checks
 
-The macOS app is pinned separately to the newest stable public `OpenClaw-*.zip` artifact. If upstream has not promoted desktop assets for the latest source release yet, `openclaw-app` may lag; that must not block Linux users or macOS gateway users from getting the latest source-built OpenClaw.
+The macOS app is pinned separately to the newest stable public `OpenClaw-*.zip` artifact. If upstream has not promoted desktop assets for the latest source release yet, `openclaw-app` may lag; that must not block Linux users or macOS gateway users from getting the latest packaged OpenClaw gateway.
 
-The Nix gate is deliberately package-focused. It does not make the full upstream Vitest suite a hard promotion gate; upstream owns source test health, while `nix-openclaw` verifies the source build, generated config options, package contents, smoke startup, module activation, and newest available macOS app artifact.
+The Nix gate is deliberately package-focused. It does not make the full upstream Vitest suite a hard promotion gate; upstream owns source test health, while `nix-openclaw` verifies the npm-shrinkwrapped gateway package, package contents, smoke startup, module activation, generated config materialization during pin updates, and newest available macOS app artifact.
 
 Outputs:
 ```
@@ -682,6 +989,28 @@ Pins live in:
 4) The stable pin workflow materializes the source pin from the newest source tag ref, updates the app asset pin from the newest public app zip, and regenerates config options from the selected source.
 5) The stable pin workflow validates that source/app pin set on the same Linux + macOS contract as repository `CI`.
 6) Only after both validations pass does the workflow push one release-mirroring commit to `main`.
+
+### Mirrored tags
+
+When a complete package state is proven on `main`, `nix-openclaw` publishes a
+matching `v<OpenClaw version>` tag and lightweight GitHub Release. The tag points
+at the validated `nix-openclaw` commit, so users can install the same upstream
+OpenClaw version through Nix:
+
+```bash
+nix run github:openclaw/nix-openclaw/v2026.5.28#openclaw
+```
+
+Each generated GitHub Release links back to the matching upstream OpenClaw
+release so users can click through from the Nix package state to the source
+release notes and artifacts.
+
+Mirrored tags are only created when the source pin and macOS app pin both match
+the same upstream stable OpenClaw version and repository `CI` is green on Linux
+and macOS for that exact commit. If a source release is packageable but the
+matching public macOS app zip is missing, `main` may still carry the packaging
+work, but no mirrored `v<OpenClaw version>` tag is published until the full
+user-facing package state is complete.
 
 ---
 
@@ -720,6 +1049,10 @@ home-manager switch --rollback  # revert
 | `openclaw` (default) | Canonical package. Exposes `openclaw`; keeps runtime tools internal. macOS also links the app. |
 | `openclaw-gateway` | Component output: gateway CLI/service only |
 | `openclaw-app` | Component output: macOS app only |
+
+The default overlay preserves Nixpkgs' `pnpm` and versioned pnpm attributes.
+OpenClaw's private pnpm pins are available as `pkgs.openclawPackages.pnpm_11`
+and `pkgs.openclawPackages.pnpm_12` when needed for packaging or debugging.
 
 ### Local memory
 

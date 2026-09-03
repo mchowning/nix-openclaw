@@ -44,12 +44,16 @@ Source: https://github.com/orgs/openclaw/people
 - `README.md` is the source of truth for product direction and user-facing behavior.
 - Keep documentation surface area small. Update `README.md` first, then adjust references.
 - Keep committed guidance about public `nix-openclaw` behavior, public upstream OpenClaw releases, public artifacts, and public CI.
+- Update `CHANGELOG.md` for significant user-facing changes, primarily breaking
+  changes and required migrations. Include the date, before/after config when
+  useful, and the packaged upstream OpenClaw release or commit when that context
+  affects the change.
 - Keep consumer setup docs in `README.md`, templates, and module docs.
 - Keep maintainer runbooks in `maintainers/`.
 - Never add internal ExecPlans or agent scratch history to this repo. `.agent/` is ignored for this reason.
 - If a private deployment exposes a public packaging bug, fix the public package here and keep deployment-specific repair elsewhere.
-- OpenClaw plugin loading belongs here: package curated runtime plugin roots as Nix artifacts, expose curated outputs through package/check outputs for Garnix, and let host repos only enable/configure them.
-- Do not make host config run npm/ClawHub installs at runtime for the batteries-included path. `customPlugins.source = "npm:..."` is allowed only when nix-openclaw turns it into an immutable, hash-backed store path and wires it through OpenClaw's normal `plugins.load.paths`.
+- OpenClaw plugin loading belongs here: package supported OpenClaw catalog runtime plugin roots as Nix artifacts, expose generated outputs through package/check outputs for Garnix, and let host repos only enable/configure them.
+- Do not make host config run package-manager installs at runtime for the batteries-included path. Supported OpenClaw catalog runtime plugin ids use `programs.openclaw.runtimePlugins`; `customPlugins.source = "npm:..."` is not supported.
 
 ## Packaging Defaults
 

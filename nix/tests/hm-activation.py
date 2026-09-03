@@ -1,14 +1,19 @@
 start_all()
 
 machine.wait_until_succeeds(
-    "systemctl show -p Result home-manager-alice.service | grep -q 'Result=success'"
+    "systemctl show -p Result home-manager-alice.service | grep -q '^Result=success$' && "
+    "systemctl show -p SubState home-manager-alice.service | grep -Eq '^SubState=(dead|exited)$'"
 )
 
 machine.wait_until_succeeds("test -f /home/alice/.openclaw/openclaw.json")
 machine.wait_until_succeeds("test -f /home/alice/.openclaw/workspace/AGENTS.md")
 machine.succeed("test ! -L /home/alice/.openclaw/workspace/AGENTS.md")
-machine.wait_until_succeeds("test -f /home/alice/.openclaw/workspace/skills/skill/SKILL.md")
-machine.succeed("test ! -L /home/alice/.openclaw/workspace/skills/skill")
+machine.succeed("test -f /home/alice/.openclaw/workspace/IDENTITY.md")
+machine.succeed("test -f /home/alice/.openclaw/workspace/USER.md")
+machine.succeed("test -f /home/alice/.openclaw/workspace/HEARTBEAT.md")
+machine.succeed("test -f /home/alice/.openclaw/workspace/LORE.md")
+machine.succeed("grep -q '\"skipBootstrap\":true' /home/alice/.openclaw/openclaw.json")
+machine.succeed("grep -q 'BEGIN NIX-REPORT' /home/alice/.openclaw/workspace/TOOLS.md")
 machine.wait_until_succeeds(
     "test -x /home/alice/.openclaw/agents/main/agent/codex-home/home/.nix-profile/bin/jq"
 )

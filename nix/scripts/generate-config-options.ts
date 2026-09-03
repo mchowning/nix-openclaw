@@ -130,6 +130,18 @@ const stripNullable = (schemaObj: JsonSchema): { schema: JsonSchema; nullable: b
   return { schema, nullable: false };
 };
 
+const flattenUnionEntries = (entries: JsonSchema[]): JsonSchema[] =>
+  entries.flatMap((entry) => {
+    const schema = deref(entry, new Set());
+    if (schema.anyOf && Array.isArray(schema.anyOf)) {
+      return flattenUnionEntries(schema.anyOf as JsonSchema[]);
+    }
+    if (schema.oneOf && Array.isArray(schema.oneOf)) {
+      return flattenUnionEntries(schema.oneOf as JsonSchema[]);
+    }
+    return [schema];
+  });
+
 const typeForSchema = (schemaObj: JsonSchema, indent: string, pathSegments: string[] = []): string => {
   const { schema, nullable } = stripNullable(schemaObj);
   const typeExpr = baseTypeForSchema(schema, indent, pathSegments);
@@ -137,6 +149,14 @@ const typeForSchema = (schemaObj: JsonSchema, indent: string, pathSegments: stri
     return `t.nullOr (${typeExpr})`;
   }
   return typeExpr;
+};
+
+const oneOfTypeForSchemas = (entries: JsonSchema[], indent: string, pathSegments: string[]): string => {
+  const parts = Array.from(
+    new Set(entries.map((entry) => typeForSchema(entry, indent, pathSegments)))
+  );
+  if (parts.length === 1) return parts[0];
+  return `t.oneOf [ ${parts.map((part) => `(${part})`).join(" ")} ]`;
 };
 
 const baseTypeForSchema = (schemaObj: JsonSchema, indent: string, pathSegments: string[]): string => {
@@ -151,18 +171,16 @@ const baseTypeForSchema = (schemaObj: JsonSchema, indent: string, pathSegments: 
 
   if (schema.anyOf && Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
     const entries = schema.anyOf as JsonSchema[];
-    const objectUnion = objectUnionTypeForSchemas(entries, indent);
+    const objectUnion = objectUnionTypeForSchemas(flattenUnionEntries(entries), indent);
     if (objectUnion) return objectUnion;
-    const parts = entries.map((entry) => `(${typeForSchema(entry, indent, pathSegments)})`).join(" ");
-    return `t.oneOf [ ${parts} ]`;
+    return oneOfTypeForSchemas(entries, indent, pathSegments);
   }
 
   if (schema.oneOf && Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
     const entries = schema.oneOf as JsonSchema[];
-    const objectUnion = objectUnionTypeForSchemas(entries, indent);
+    const objectUnion = objectUnionTypeForSchemas(flattenUnionEntries(entries), indent);
     if (objectUnion) return objectUnion;
-    const parts = entries.map((entry) => `(${typeForSchema(entry, indent, pathSegments)})`).join(" ");
-    return `t.oneOf [ ${parts} ]`;
+    return oneOfTypeForSchemas(entries, indent, pathSegments);
   }
 
   if (schema.allOf && Array.isArray(schema.allOf) && schema.allOf.length > 0) {
@@ -171,10 +189,11 @@ const baseTypeForSchema = (schemaObj: JsonSchema, indent: string, pathSegments: 
 
   const schemaType = schema.type;
   if (Array.isArray(schemaType) && schemaType.length > 0) {
-    const parts = schemaType
-      .map((entry) => `(${typeForSchema({ type: entry }, indent, pathSegments)})`)
-      .join(" ");
-    return `t.oneOf [ ${parts} ]`;
+    return oneOfTypeForSchemas(
+      schemaType.map((entry) => ({ type: entry })),
+      indent,
+      pathSegments
+    );
   }
 
   switch (schemaType) {
@@ -220,11 +239,6 @@ const objectUnionTypeForSchemas = (entries: JsonSchema[], indent: string): strin
   if (sourceValues.some((value) => value === null)) return null;
 
   const uniqueSourceValues = Array.from(new Set(sourceValues as string[]));
-  if (uniqueSourceValues.length !== sourceValues.length) return null;
-  const keySets = propsByVariant.map((props) =>
-    Object.keys(props as Record<string, JsonSchema>).sort().join("\n")
-  );
-  if (new Set(keySets).size === 1) return null;
 
   const merged: Record<string, JsonSchema[]> = {};
   for (const props of propsByVariant as Record<string, JsonSchema>[]) {

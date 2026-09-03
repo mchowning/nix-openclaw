@@ -68,6 +68,10 @@ fi
 if [ -d skills ]; then
   log_step "copy bundled skills" cp -r skills "$out/lib/openclaw/"
 fi
+if [ -d src/agents/templates ]; then
+  mkdir -p "$out/lib/openclaw/src/agents"
+  log_step "copy agent workspace templates" cp -r src/agents/templates "$out/lib/openclaw/src/agents/"
+fi
 
 # Gateway plugin discovery looks under dist/extensions/*/openclaw.plugin.json.
 # Upstream's build emits JS into dist/extensions but leaves manifests in extensions/.
@@ -159,4 +163,4 @@ if [ -d "$out/lib/openclaw/dist-runtime" ]; then
   log_step "validate dist-runtime symlinks" check_no_broken_symlinks "$out/lib/openclaw/dist-runtime"
 fi
 
-log_step "wrap openclaw" bash -e -c '. "$STDENV_SETUP"; makeWrapper "$NODE_BIN" "$out/bin/openclaw" --add-flags "$out/lib/openclaw/dist/index.js" --set-default OPENCLAW_NIX_MODE "1"'
+log_step "wrap openclaw" bash -e -c '. "$STDENV_SETUP"; makeWrapper "$NODE_BIN" "$out/bin/openclaw" --add-flags "$out/lib/openclaw/dist/index.js" --prefix PATH : "$(dirname "$NODE_BIN")" --set-default OPENCLAW_NIX_MODE "1" --set-default OPENCLAW_DISABLE_PERSISTED_PLUGIN_REGISTRY "1"'

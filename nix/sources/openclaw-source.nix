@@ -5,9 +5,11 @@
   pnpmMajor = "11";
   applyPublicSurfaceHardlinksPatch = false;
   applySkipPluginAutoEnableNixModePatch = false;
-  releaseTag = "v2026.5.22";
-  releaseVersion = "2026.5.22";
-  rev = "a374c3a5bfd5225ce319bce3865aab6216309c4f";
-  hash = "sha256-SllmrkkbIFwznUhZ6zogmQ91oCao6d0fMI5473jjrU0=";
-  pnpmDepsHash = "sha256-r/WsHFjfpuXjuWFsCxljM4uPWbUKHjZHUAP0+vH8ZDE=";
+  applyNixStorePluginOwnershipPatch = true;
+  releaseTag = "v2026.7.1-2";
+  releaseVersion = "2026.7.1-2";
+  runtimePluginVersion = "2026.7.1";
+  rev = "0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c";
+  hash = "sha256-kpiKCTjXX4l525IJDNsnI7j2IT6ZYdqvFTyRlKGgomg=";
+  gatewayNpmDepsHash = "sha256-wgFsto4dpdVHl0x+H/QL/Rf6bSznmGJFd+tfirnACu8=";
 }

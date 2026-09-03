@@ -43,7 +43,7 @@ export NPM_CONFIG_STORE_DIR="$store_path"
 export NPM_CONFIG_STORE_PATH="$store_path"
 export HOME="$(mktemp -d)"
 
-log_step "pnpm install (offline, frozen, ignore-scripts)" pnpm install --offline --frozen-lockfile --ignore-scripts --store-dir "$store_path"
+log_step "pnpm install (offline, frozen, ignore-scripts)" env CI=true pnpm install --offline --frozen-lockfile --ignore-scripts --store-dir "$store_path"
 
 log_step "chmod node_modules writable" chmod -R u+w node_modules
 
@@ -124,10 +124,25 @@ if [ -f "scripts/bundled-plugin-assets.mjs" ]; then
 else
   log_step "build: canvas:a2ui:bundle" node scripts/bundle-a2ui.mjs
 fi
+tsdown_max_old_space_mb="${OPENCLAW_NIX_TSDOWN_MAX_OLD_SPACE_MB:-}"
+if [ -z "$tsdown_max_old_space_mb" ]; then
+  case "$(uname -s)" in
+    Darwin) tsdown_max_old_space_mb=512 ;;
+    *) tsdown_max_old_space_mb=8192 ;;
+  esac
+fi
+
 tsdown_node_options="${NODE_OPTIONS:-}"
 case "$tsdown_node_options" in
   *--max-old-space-size*) ;;
-  *) tsdown_node_options="${tsdown_node_options:+$tsdown_node_options }--max-old-space-size=${OPENCLAW_NIX_TSDOWN_MAX_OLD_SPACE_MB:-8192}" ;;
+  *) tsdown_node_options="${tsdown_node_options:+$tsdown_node_options }--max-old-space-size=$tsdown_max_old_space_mb" ;;
+esac
+
+tsc_max_old_space_mb="${OPENCLAW_NIX_TSC_MAX_OLD_SPACE_MB:-4096}"
+tsc_node_options="${NODE_OPTIONS:-}"
+case "$tsc_node_options" in
+  *--max-old-space-size*) ;;
+  *) tsc_node_options="${tsc_node_options:+$tsc_node_options }--max-old-space-size=$tsc_max_old_space_mb" ;;
 esac
 
 tsdown_cli="node_modules/tsdown/dist/run.mjs"
@@ -146,13 +161,16 @@ if [ -z "${tsc_cli:-}" ] || [ ! -f "$tsc_cli" ]; then
   echo "TypeScript CLI not found under ./node_modules" >&2
   exit 1
 fi
-log_step "build: tsdown" env NODE_OPTIONS="$tsdown_node_options" node "$tsdown_cli" --config-loader unrun --logLevel warn
+log_step "build: tsdown" env \
+  NODE_OPTIONS="$tsdown_node_options" \
+  OPENCLAW_RUN_NODE_SKIP_DTS_BUILD=1 \
+  node "$tsdown_cli" --config-loader unrun --logLevel warn
 log_step "build: runtime-postbuild" node scripts/runtime-postbuild.mjs
 if [ -f "scripts/stage-bundled-plugin-runtime.mjs" ]; then
   log_step "build: stage bundled plugin runtime" node scripts/stage-bundled-plugin-runtime.mjs
 fi
-log_step "build: plugin-sdk dts" node "$tsc_cli" -p tsconfig.plugin-sdk.dts.json
-log_step "build: write-plugin-sdk-entry-dts" node --import tsx scripts/write-plugin-sdk-entry-dts.ts
+log_step "build: plugin-sdk dts" env NODE_OPTIONS="$tsc_node_options" node "$tsc_cli" -p tsconfig.plugin-sdk.dts.json
+log_step "build: write-plugin-sdk-entry-dts" env NODE_OPTIONS="$tsc_node_options" node --import tsx scripts/write-plugin-sdk-entry-dts.ts
 if [ -f "scripts/copy-plugin-sdk-root-alias.mjs" ]; then
   log_step "build: copy-plugin-sdk-root-alias" node scripts/copy-plugin-sdk-root-alias.mjs
 fi

@@ -24,16 +24,20 @@ require_path "${root}/dist-runtime/extensions/memory-core/openclaw.plugin.json"
 require_path "${root}/dist-runtime/extensions/acpx/openclaw.plugin.json"
 require_path "${root}/dist-runtime/extensions/acpx/package.json"
 require_path "${root}/dist-runtime/extensions/acpx/index.js"
-require_path "${root}/dist-runtime/extensions/acpx/error-format.mjs"
-require_path "${root}/dist-runtime/extensions/acpx/mcp-command-line.mjs"
-require_path "${root}/dist-runtime/extensions/acpx/mcp-proxy.mjs"
+require_path "${root}/dist-runtime/extensions/acpx/register.runtime.js"
+require_path "${root}/dist-runtime/extensions/acpx/runtime-api.js"
+require_path "${root}/dist-runtime/extensions/acpx/setup-api.js"
+require_path "${root}/dist-runtime/extensions/acpx/skills/acp-router/SKILL.md"
 require_path "${root}/docs/reference/templates"
 require_path "${root}/docs/reference/templates/AGENTS.md"
 require_path "${root}/docs/reference/templates/SOUL.md"
 require_path "${root}/docs/reference/templates/TOOLS.md"
+require_path "${root}/src/agents/templates/HEARTBEAT.md"
 require_path "${root}/skills"
-require_path "${root}/node_modules/hasown"
-require_path "${root}/node_modules/combined-stream"
+if find "${root}/node_modules" -path "*/form-data/package.json" -type f -print | grep -q .; then
+  require_path "${root}/node_modules/hasown"
+  require_path "${root}/node_modules/combined-stream"
+fi
 
 public_surface_loader="$(
   find "${root}/dist" -name "*.js" -type f -exec grep -sl "function loadBundledPluginPublicArtifactModuleSync" {} + | head -1
@@ -46,6 +50,7 @@ if grep -q "rejectHardlinks: true" "$public_surface_loader"; then
   echo "Bundled plugin public surface loader still rejects hardlinked package files" >&2
   exit 1
 fi
+
 export PUBLIC_SURFACE_LOADER="$public_surface_loader"
 node --input-type=module <<'NODE'
 import { pathToFileURL } from "node:url";
@@ -57,16 +62,51 @@ if (!loaderPath) {
 
 const loader = await import(pathToFileURL(loaderPath).href);
 const loadBundledPluginPublicArtifactModuleSync =
-  loader.loadBundledPluginPublicArtifactModuleSync ?? loader.t;
+  loader.loadBundledPluginPublicArtifactModuleSync;
+const loadBundledPluginPublicArtifactModuleFromCandidatesSync =
+  loader.loadBundledPluginPublicArtifactModuleFromCandidatesSync;
+const minifiedLoader = loader.t;
 
-if (typeof loadBundledPluginPublicArtifactModuleSync !== "function") {
+if (
+  typeof loadBundledPluginPublicArtifactModuleSync !== "function" &&
+  typeof loadBundledPluginPublicArtifactModuleFromCandidatesSync !== "function" &&
+  typeof minifiedLoader !== "function"
+) {
   throw new Error("Bundled plugin public surface loader export not found");
 }
 
-loadBundledPluginPublicArtifactModuleSync({
+const loadSingleParams = {
   dirName: "openai",
   artifactBasename: "provider-policy-api.js",
-});
+};
+const loadCandidateParams = {
+  dirName: "openai",
+  artifactCandidates: ["provider-policy-api.js"],
+};
+
+function loadPublicArtifact() {
+  if (typeof loadBundledPluginPublicArtifactModuleSync === "function") {
+    return loadBundledPluginPublicArtifactModuleSync(loadSingleParams);
+  }
+  if (typeof loadBundledPluginPublicArtifactModuleFromCandidatesSync === "function") {
+    return loadBundledPluginPublicArtifactModuleFromCandidatesSync(loadCandidateParams);
+  }
+  try {
+    return minifiedLoader(loadSingleParams);
+  } catch (error) {
+    if (
+      error instanceof TypeError &&
+      String(error.message).includes("artifactCandidates is not iterable")
+    ) {
+      return minifiedLoader(loadCandidateParams);
+    }
+    throw error;
+  }
+}
+
+if (!loadPublicArtifact()) {
+  throw new Error("Bundled OpenAI provider policy artifact did not load");
+}
 NODE
 
 require_js_alias_target() {

@@ -69,6 +69,7 @@ jobs:
     timeout-minutes: 60
     outputs:
       materialization_digest: ${{ steps.materialization.outputs.materialization_digest }}
+      validation_ok: ${{ steps.validation.outputs.validation_ok }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -77,6 +78,8 @@ jobs:
         uses: cachix/install-nix-action@v31
 
       - name: Materialize selected release
+        id: materialize
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -88,45 +91,87 @@ jobs:
 
       - name: Record materialized diff digest
         id: materialization
+        if: steps.materialize.outcome == 'success'
         run: |
           set -euo pipefail
+          pin_files=()
+          while IFS= read -r file; do
+            pin_files+=("$file")
+          done < <(scripts/update-pins.sh files)
+          git add --intent-to-add -- "${pin_files[@]}"
           digest="$(
-            git diff --binary -- \
-              nix/sources/openclaw-source.nix \
-              nix/packages/openclaw-app.nix \
-              nix/generated/openclaw-config-options.nix \
+            git diff --binary -- "${pin_files[@]}" \
               | shasum -a 256 \
               | awk '{ print $1 }'
           )"
           echo "materialization_digest=${digest}" >> "$GITHUB_OUTPUT"
 
       - name: Verify flake.lock owners
+        id: owners
+        if: steps.materialize.outcome == 'success' && steps.materialization.outcome == 'success'
+        continue-on-error: true
         run: scripts/check-flake-lock-owners.sh
 
-      - name: Run Linux CI aggregator
-        run: timeout --foreground 50m nix build .#checks.x86_64-linux.ci --accept-flake-config
-
-      - name: Dump failing source check log
-        if: failure()
+      - name: Validate Linux supported surface
+        id: supported_surface
+        if: steps.materialize.outcome == 'success' && steps.materialization.outcome == 'success' && steps.owners.outcome == 'success'
+        continue-on-error: true
         run: |
-          drv="$(nix eval --raw .#checks.x86_64-linux.source-checks.drvPath --accept-flake-config)"
-          nix log "$drv" | tail -n 400 || true
+          timeout --foreground 50m maintainers/scripts/ci-nix-build.sh linux-supported-surface \
+            .#checks.x86_64-linux.package-artifacts \
+            .#checks.x86_64-linux.module-render \
+            .#checks.x86_64-linux.runtime-smoke \
+            .#checks.x86_64-linux.platform-activation \
+            .#checks.x86_64-linux.runtime-plugin-packages \
+            .#checks.x86_64-linux.runtime-plugin-host \
+            .#checks.x86_64-linux.qmd-opt-in \
+            --accept-flake-config
+
+      - name: Summarize Linux HM activation timing
+        if: steps.supported_surface.outcome == 'success'
+        run: maintainers/scripts/summarize-hm-activation-timing.sh x86_64-linux linux-supported-surface
+
+      - name: Record validation result
+        id: validation
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.materialize.outcome }}" == "success" && "${{ steps.owners.outcome }}" == "success" && "${{ steps.supported_surface.outcome }}" == "success" ]]; then
+            echo "validation_ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "validation_ok=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Linux validation did not pass"
+            echo
+            echo "- Materialize: \`${{ steps.materialize.outcome }}\`"
+            echo "- Materialized diff digest: \`${{ steps.materialization.outcome }}\`"
+            echo "- flake.lock owners: \`${{ steps.owners.outcome }}\`"
+            echo "- Supported surface: \`${{ steps.supported_surface.outcome }}\`"
+            echo
+            echo "Promotion skipped; pinned source remains unchanged."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
   validate-macos:
     needs: select
     if: needs.select.outputs.has_update == 'true'
     runs-on: macos-14
-    timeout-minutes: 40
+    timeout-minutes: 60
     outputs:
       materialization_digest: ${{ steps.materialization.outputs.materialization_digest }}
+      validation_ok: ${{ steps.validation.outputs.validation_ok }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
+        uses: cachix/install-nix-action@v31
 
       - name: Materialize selected release
+        id: materialize
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -138,32 +183,119 @@ jobs:
 
       - name: Record materialized diff digest
         id: materialization
+        if: steps.materialize.outcome == 'success'
         run: |
           set -euo pipefail
+          pin_files=()
+          while IFS= read -r file; do
+            pin_files+=("$file")
+          done < <(scripts/update-pins.sh files)
+          git add --intent-to-add -- "${pin_files[@]}"
           digest="$(
-            git diff --binary -- \
-              nix/sources/openclaw-source.nix \
-              nix/packages/openclaw-app.nix \
-              nix/generated/openclaw-config-options.nix \
+            git diff --binary -- "${pin_files[@]}" \
               | shasum -a 256 \
               | awk '{ print $1 }'
           )"
           echo "materialization_digest=${digest}" >> "$GITHUB_OUTPUT"
 
-      - name: Build Darwin CI aggregator
-        timeout-minutes: 25
-        run: nix build .#checks.aarch64-darwin.ci --accept-flake-config
+      - name: Validate macOS supported surface
+        id: supported_surface
+        if: steps.materialize.outcome == 'success' && steps.materialization.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 45
+        run: |
+          maintainers/scripts/ci-nix-build.sh macos-supported-surface \
+            --accept-flake-config \
+            --option max-jobs 2 \
+            .#checks.aarch64-darwin.package-artifacts \
+            .#checks.aarch64-darwin.module-render \
+            .#checks.aarch64-darwin.runtime-smoke \
+            .#checks.aarch64-darwin.platform-activation \
+            .#checks.aarch64-darwin.runtime-plugin-packages \
+            .#checks.aarch64-darwin.runtime-plugin-host \
+            .#checks.aarch64-darwin.qmd-opt-in
 
       - name: Run HM activation
+        id: hm
+        if: steps.materialize.outcome == 'success' && steps.materialization.outcome == 'success' && steps.supported_surface.outcome == 'success'
+        continue-on-error: true
         timeout-minutes: 10
-        run: scripts/hm-activation-macos.sh
+        run: |
+          nix build \
+            --accept-flake-config \
+            --option max-jobs 2 \
+            --out-link result-platform-activation \
+            .#checks.aarch64-darwin.platform-activation
+          OPENCLAW_HM_ACTIVATION_PACKAGE="$PWD/result-platform-activation" scripts/hm-activation-macos.sh
 
-  promote:
+      - name: Record validation result
+        id: validation
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.materialize.outcome }}" == "success" && "${{ steps.supported_surface.outcome }}" == "success" && "${{ steps.hm.outcome }}" == "success" ]]; then
+            echo "validation_ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "validation_ok=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "### macOS validation did not pass"
+            echo
+            echo "- Materialize: \`${{ steps.materialize.outcome }}\`"
+            echo "- Materialized diff digest: \`${{ steps.materialization.outcome }}\`"
+            echo "- Supported surface: \`${{ steps.supported_surface.outcome }}\`"
+            echo "- HM activation: \`${{ steps.hm.outcome }}\`"
+            echo
+            echo "Promotion skipped; pinned source remains unchanged."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+  verify-materialization:
     needs:
       - select
       - validate-linux
       - validate-macos
-    if: needs.select.outputs.has_update == 'true'
+    if: >-
+      ${{
+        needs.select.outputs.has_update == 'true' &&
+        needs.validate-linux.outputs.validation_ok == 'true' &&
+        needs.validate-macos.outputs.validation_ok == 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      materialization_digest: ${{ steps.verify.outputs.materialization_digest }}
+    steps:
+      - name: Verify cross-platform materialization
+        id: verify
+        env:
+          LINUX_MATERIALIZATION_DIGEST: ${{ needs.validate-linux.outputs.materialization_digest }}
+          MACOS_MATERIALIZATION_DIGEST: ${{ needs.validate-macos.outputs.materialization_digest }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$LINUX_MATERIALIZATION_DIGEST" || -z "$MACOS_MATERIALIZATION_DIGEST" ]]; then
+            echo "Missing validation materialization digest." >&2
+            exit 1
+          fi
+          if [[ "$LINUX_MATERIALIZATION_DIGEST" != "$MACOS_MATERIALIZATION_DIGEST" ]]; then
+            echo "Linux and macOS materialized different release diffs." >&2
+            echo "Linux: $LINUX_MATERIALIZATION_DIGEST" >&2
+            echo "macOS: $MACOS_MATERIALIZATION_DIGEST" >&2
+            exit 1
+          fi
+          echo "materialization_digest=$LINUX_MATERIALIZATION_DIGEST" >> "$GITHUB_OUTPUT"
+
+  promote:
+    needs:
+      - select
+      - verify-materialization
+    if: >-
+      ${{
+        github.ref == 'refs/heads/main' &&
+        needs.select.outputs.has_update == 'true'
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -176,28 +308,16 @@ jobs:
           fetch-depth: 0
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
+        uses: cachix/install-nix-action@v31
 
       - name: Promote selected release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LINUX_MATERIALIZATION_DIGEST: ${{ needs.validate-linux.outputs.materialization_digest }}
-          MACOS_MATERIALIZATION_DIGEST: ${{ needs.validate-macos.outputs.materialization_digest }}
+          VALIDATED_MATERIALIZATION_DIGEST: ${{ needs.verify-materialization.outputs.materialization_digest }}
         run: |
           set -euo pipefail
           git config user.name "openclaw-ci"
           git config user.email "ci@openclaw.local"
-
-          if [[ -z "$LINUX_MATERIALIZATION_DIGEST" || -z "$MACOS_MATERIALIZATION_DIGEST" ]]; then
-            echo "Missing validation materialization digest." >&2
-            exit 1
-          fi
-          if [[ "$LINUX_MATERIALIZATION_DIGEST" != "$MACOS_MATERIALIZATION_DIGEST" ]]; then
-            echo "Linux and macOS materialized different release diffs." >&2
-            echo "Linux: $LINUX_MATERIALIZATION_DIGEST" >&2
-            echo "macOS: $MACOS_MATERIALIZATION_DIGEST" >&2
-            exit 1
-          fi
 
           scripts/update-pins.sh apply \
             "${{ needs.select.outputs.source_tag }}" \
@@ -205,33 +325,30 @@ jobs:
             "${{ needs.select.outputs.app_tag }}" \
             "${{ needs.select.outputs.app_url }}"
 
-          if git diff --quiet -- \
-            nix/sources/openclaw-source.nix \
-            nix/packages/openclaw-app.nix \
-            nix/generated/openclaw-config-options.nix; then
+          pin_files=()
+          while IFS= read -r file; do
+            pin_files+=("$file")
+          done < <(scripts/update-pins.sh files)
+          git add --intent-to-add -- "${pin_files[@]}"
+
+          if git diff --quiet -- "${pin_files[@]}"; then
             echo "No pin changes detected."
             exit 0
           fi
 
           promote_digest="$(
-            git diff --binary -- \
-              nix/sources/openclaw-source.nix \
-              nix/packages/openclaw-app.nix \
-              nix/generated/openclaw-config-options.nix \
+            git diff --binary -- "${pin_files[@]}" \
               | shasum -a 256 \
               | awk '{ print $1 }'
           )"
-          if [[ "$promote_digest" != "$LINUX_MATERIALIZATION_DIGEST" ]]; then
+          if [[ "$promote_digest" != "$VALIDATED_MATERIALIZATION_DIGEST" ]]; then
             echo "Promote materialized a different release diff than validation." >&2
-            echo "Validated: $LINUX_MATERIALIZATION_DIGEST" >&2
+            echo "Validated: $VALIDATED_MATERIALIZATION_DIGEST" >&2
             echo "Promote:   $promote_digest" >&2
             exit 1
           fi
 
-          git add \
-            nix/sources/openclaw-source.nix \
-            nix/packages/openclaw-app.nix \
-            nix/generated/openclaw-config-options.nix
+          git add "${pin_files[@]}"
 
           git commit -F - <<EOF
           🤖 codex: mirror OpenClaw stable source ${{ needs.select.outputs.source_tag }}
@@ -242,11 +359,11 @@ jobs:
           - keep the macOS app pin on the newest public app artifact
 
           Why:
-          - keep source-built OpenClaw current without blocking on public macOS app asset lag
+          - keep the npm-shrinkwrapped OpenClaw gateway current without blocking on public macOS app asset lag
 
           Tests:
-          - nix build .#checks.x86_64-linux.ci --accept-flake-config
-          - nix build .#checks.aarch64-darwin.ci --accept-flake-config
+          - nix build .#checks.x86_64-linux.package-artifacts .#checks.x86_64-linux.module-render .#checks.x86_64-linux.runtime-smoke .#checks.x86_64-linux.platform-activation .#checks.x86_64-linux.runtime-plugin-packages .#checks.x86_64-linux.runtime-plugin-host .#checks.x86_64-linux.qmd-opt-in --accept-flake-config
+          - nix build --accept-flake-config --option max-jobs 2 .#checks.aarch64-darwin.package-artifacts .#checks.aarch64-darwin.module-render .#checks.aarch64-darwin.runtime-smoke .#checks.aarch64-darwin.platform-activation .#checks.aarch64-darwin.runtime-plugin-packages .#checks.aarch64-darwin.runtime-plugin-host .#checks.aarch64-darwin.qmd-opt-in
           - scripts/hm-activation-macos.sh
           EOF
 

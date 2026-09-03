@@ -11,6 +11,7 @@ let
   homeDir = openclawLib.homeDir;
   appPackage = openclawLib.appPackage;
   qmdPackage = openclawLib.qmdPackage;
+  toJSONWithContext = import ../../../lib/json-with-context.nix { inherit lib; };
 
   defaultInstance = {
     enable = cfg.enable;
@@ -27,6 +28,8 @@ let
     launchd = cfg.launchd;
     systemd = cfg.systemd;
     plugins = openclawLib.effectivePlugins;
+    runtimePlugins = cfg.runtimePlugins;
+    runtimePluginSources = cfg.runtimePluginSources;
     config = { };
     appDefaults = {
       enable = true;
@@ -66,6 +69,7 @@ let
       plugins
       ;
   };
+  runtimePlugins = import ./runtime-plugins.nix { inherit lib pkgs; };
 
   stripNulls =
     value:
@@ -78,6 +82,18 @@ let
     else
       value;
 
+  execSecretFlowDocsUrl = "https://github.com/openclaw/nix-openclaw#secrets-and-openclaw-exec-secretrefs";
+
+  containsExecSecretFlow =
+    value:
+    if builtins.isAttrs value then
+      ((value.source or null) == "exec" && ((value ? command) || ((value ? provider) && (value ? id))))
+      || lib.any containsExecSecretFlow (builtins.attrValues value)
+    else if builtins.isList value then
+      lib.any containsExecSecretFlow value
+    else
+      false;
+
   baseConfig = {
     gateway = {
       mode = "local";
@@ -89,7 +105,8 @@ let
     let
       gatewayPackage =
         if inst.gatewayPath != null then
-          pkgs.callPackage ../../packages/openclaw-gateway.nix {
+          pkgs.callPackage ../../../packages/openclaw-gateway.nix {
+            sourceInfo = import ../../../sources/openclaw-source.nix;
             gatewaySrc = builtins.path {
               path = inst.gatewayPath;
               name = "openclaw-gateway-src";
@@ -118,25 +135,70 @@ let
           plugin = "runtime";
         }) (cfg.environment // inst.environment));
       userConfig = stripNulls (lib.recursiveUpdate (stripNulls cfg.config) (stripNulls inst.config));
-      pluginEntryConfig = plugins.openclawPluginEntriesConfigFor name;
-      openclawPluginLoadPaths = plugins.openclawPluginLoadPathsFor name;
-      mergedConfigWithoutLoadPaths = stripNulls (
-        lib.recursiveUpdate (lib.recursiveUpdate baseConfig pluginEntryConfig) userConfig
-      );
+      nixSkillLoadDirs = files.skillLoadDirsForInstance name;
+      mergedConfigWithoutLoadPaths = stripNulls (lib.recursiveUpdate baseConfig userConfig);
       existingOpenClawPluginLoadPaths = (
         ((mergedConfigWithoutLoadPaths.plugins or { }).load or { }).paths or [ ]
       );
-      mergedConfig0 =
-        if openclawPluginLoadPaths == [ ] then
-          mergedConfigWithoutLoadPaths
-        else
-          lib.recursiveUpdate mergedConfigWithoutLoadPaths {
-            plugins = {
-              load = {
-                paths = lib.unique (openclawPluginLoadPaths ++ existingOpenClawPluginLoadPaths);
-              };
+      existingSkillLoadDirs = (
+        ((mergedConfigWithoutLoadPaths.skills or { }).load or { }).extraDirs or [ ]
+      );
+      existingAllowList = ((mergedConfigWithoutLoadPaths.plugins or { }).allow or null);
+      existingDenyList = ((userConfig.plugins or { }).deny or [ ]);
+      userPluginEntries = ((userConfig.plugins or { }).entries or { });
+      runtimePluginConfig = runtimePlugins.forInstance {
+        inherit
+          name
+          existingAllowList
+          userPluginEntries
+          ;
+        openclawPackage = gatewayPackage;
+        ids = inst.runtimePlugins;
+        sources = inst.runtimePluginSources;
+        existingLoadPaths = existingOpenClawPluginLoadPaths;
+        denyList = existingDenyList;
+        nixOpenClawPluginIds = [ ];
+      };
+      disablePersistedPluginRegistry = runtimePluginConfig.loadPaths != [ ];
+      generatedPluginConfig = lib.recursiveUpdate (lib.optionalAttrs
+        (runtimePluginConfig.loadPaths != [ ])
+        {
+          plugins = {
+            load = {
+              paths = lib.unique (runtimePluginConfig.loadPaths ++ existingOpenClawPluginLoadPaths);
             };
           };
+        }
+      ) runtimePluginConfig.config;
+      generatedSkillLoadConfig = lib.optionalAttrs (nixSkillLoadDirs != [ ]) {
+        skills = {
+          load = {
+            extraDirs = lib.unique (nixSkillLoadDirs ++ existingSkillLoadDirs);
+          };
+        };
+      };
+      generatedBootstrapConfig = lib.optionalAttrs files.bootstrapFilesEnabled {
+        agents = {
+          defaults = {
+            skipBootstrap = true;
+          };
+        };
+      };
+      generatedLoadConfig = lib.foldl' lib.recursiveUpdate { } [
+        generatedPluginConfig
+        generatedSkillLoadConfig
+        generatedBootstrapConfig
+      ];
+      userSkipBootstrap = (
+        ((mergedConfigWithoutLoadPaths.agents or { }).defaults or { }).skipBootstrap or null
+      );
+      bootstrapAssertions = lib.optionals (files.bootstrapFilesEnabled && userSkipBootstrap == false) [
+        {
+          assertion = false;
+          message = "programs.openclaw.workspace.bootstrapFiles requires agents.defaults.skipBootstrap to stay true. Remove programs.openclaw.config.agents.defaults.skipBootstrap = false; OpenClaw must not seed bootstrap files in Nix-managed workspaces.";
+        }
+      ];
+      mergedConfig0 = lib.recursiveUpdate mergedConfigWithoutLoadPaths generatedLoadConfig;
       existingWorkspace = (((mergedConfig0.agents or { }).defaults or { }).workspace or null);
       mergedConfig =
         if (cfg.workspace.pinAgentDefaults or true) && existingWorkspace == null then
@@ -149,6 +211,8 @@ let
           }
         else
           mergedConfig0;
+      hasExecSecretFlow = containsExecSecretFlow mergedConfig;
+      execSecretFlowWarning = "programs.openclaw.instances.${name}.config uses OpenClaw exec secrets. nix-openclaw passes this through, but does not support or verify runtime command-based secret resolution. Prefer host-managed secrets with env/file SecretRefs: ${execSecretFlowDocsUrl}";
       qmdEnabled = (((mergedConfig.memory or { }).backend or null) == "qmd");
       gatewayRuntimePackage =
         if qmdEnabled && qmdPackage != null then
@@ -162,40 +226,14 @@ let
             OPENCLAW_GATEWAY_PACKAGE = "${gatewayPackage}";
             OPENCLAW_GATEWAY_BIN = "${gatewayPackage}/bin/openclaw";
             OPENCLAW_QMD_PATH = qmdPath;
-            installPhase = ''
-              runHook preInstall
-
-              if [ -z "''${OPENCLAW_GATEWAY_PACKAGE:-}" ]; then
-                echo "OPENCLAW_GATEWAY_PACKAGE is not set" >&2
-                exit 1
-              fi
-              if [ -z "''${OPENCLAW_GATEWAY_BIN:-}" ]; then
-                echo "OPENCLAW_GATEWAY_BIN is not set" >&2
-                exit 1
-              fi
-              if [ ! -x "$OPENCLAW_GATEWAY_BIN" ]; then
-                echo "OPENCLAW_GATEWAY_BIN is not executable: $OPENCLAW_GATEWAY_BIN" >&2
-                exit 1
-              fi
-              if [ -z "''${OPENCLAW_QMD_PATH:-}" ]; then
-                echo "OPENCLAW_QMD_PATH is not set" >&2
-                exit 1
-              fi
-
-              mkdir -p "$out/bin"
-              makeWrapper "$OPENCLAW_GATEWAY_BIN" "$out/bin/openclaw" \
-                --prefix PATH : "$OPENCLAW_QMD_PATH"
-
-              if [ -d "''${OPENCLAW_GATEWAY_PACKAGE}/Applications" ]; then
-                ln -s "''${OPENCLAW_GATEWAY_PACKAGE}/Applications" "$out/Applications"
-              fi
-
-              runHook postInstall
-            '';
+            STDENV_SETUP = "${pkgs.stdenvNoCC}/setup";
+            installPhase = "${../../../scripts/openclaw-qmd-wrapper-install.sh}";
           }
         else
           gatewayPackage;
-      configJson = builtins.toJSON mergedConfig;
+      rawConfigJson = toJSONWithContext mergedConfig;
+      configJson =
+        if hasExecSecretFlow then lib.warn execSecretFlowWarning rawConfigJson else rawConfigJson;
       configFile = pkgs.writeText "openclaw-${name}.json" configJson;
       agentIds =
         let
@@ -262,10 +300,12 @@ let
       package = gatewayRuntimePackage;
     in
     {
+      name = name;
       homeFile = {
         name = openclawLib.toRelative inst.configPath;
         value = {
-          text = configJson;
+          source = configFile;
+          text = builtins.unsafeDiscardStringContext configJson;
           force = true;
         };
       };
@@ -302,6 +342,9 @@ let
               OPENCLAW_STATE_DIR = inst.stateDir;
               OPENCLAW_IMAGE_BACKEND = "sips";
               OPENCLAW_NIX_MODE = "1";
+            }
+            // lib.optionalAttrs disablePersistedPluginRegistry {
+              OPENCLAW_DISABLE_PERSISTED_PLUGIN_REGISTRY = "1";
             };
           };
         };
@@ -322,7 +365,8 @@ let
               "OPENCLAW_CONFIG_PATH=${inst.configPath}"
               "OPENCLAW_STATE_DIR=${inst.stateDir}"
               "OPENCLAW_NIX_MODE=1"
-            ];
+            ]
+            ++ lib.optional disablePersistedPluginRegistry "OPENCLAW_DISABLE_PERSISTED_PLUGIN_REGISTRY=1";
             StandardOutput = "append:${inst.logPath}";
             StandardError = "append:${inst.logPath}";
           };
@@ -333,8 +377,12 @@ let
       appInstall = appInstall;
       package = package;
       qmdEnabled = qmdEnabled;
+      runtimePluginPackages = runtimePluginConfig.packages;
+      assertions = runtimePluginConfig.assertions ++ bootstrapAssertions;
       launchdLabel =
         if pkgs.stdenv.hostPlatform.isDarwin && inst.launchd.enable then inst.launchd.label else null;
+      systemdUnitName =
+        if pkgs.stdenv.hostPlatform.isLinux && inst.systemd.enable then inst.systemd.unitName else null;
     };
 
   instanceConfigs = lib.mapAttrsToList mkInstanceConfig enabledInstances;
@@ -356,6 +404,50 @@ let
   appInstalls = lib.filter (item: item != null) (map (item: item.appInstall) instanceConfigs);
   launchdLabels = lib.filter (label: label != null) (map (item: item.launchdLabel) instanceConfigs);
   launchdLabelArgs = lib.concatStringsSep " " (map lib.escapeShellArg launchdLabels);
+  systemdUnitNames = lib.filter (unitName: unitName != null) (
+    map (item: item.systemdUnitName) instanceConfigs
+  );
+  reloadTargetsByName =
+    targetAttr:
+    lib.listToAttrs (
+      map (item: {
+        name = item.name;
+        value = item.${targetAttr};
+      }) (lib.filter (item: item.${targetAttr} != null) instanceConfigs)
+    );
+  launchdLabelsByName = reloadTargetsByName "launchdLabel";
+  systemdUnitNamesByName = reloadTargetsByName "systemdUnitName";
+  reloadTargetsForName =
+    targetsByName: targetName:
+    if builtins.hasAttr targetName targetsByName then
+      [ targetsByName.${targetName} ]
+    else if builtins.hasAttr "default" targetsByName then
+      [ targetsByName.default ]
+    else
+      [ ];
+  reloadShellArray = values: lib.concatStringsSep " " (map lib.escapeShellArg values);
+  reloadScriptText =
+    builtins.replaceStrings
+      [
+        "@openclawReloadTestLaunchdLabels@"
+        "@openclawReloadTestSystemdUnits@"
+        "@openclawReloadProdLaunchdLabels@"
+        "@openclawReloadProdSystemdUnits@"
+        "@openclawReloadBothLaunchdLabels@"
+        "@openclawReloadBothSystemdUnits@"
+      ]
+      [
+        (reloadShellArray (reloadTargetsForName launchdLabelsByName "test"))
+        (reloadShellArray (reloadTargetsForName systemdUnitNamesByName "test"))
+        (reloadShellArray (reloadTargetsForName launchdLabelsByName "prod"))
+        (reloadShellArray (reloadTargetsForName systemdUnitNamesByName "prod"))
+        (reloadShellArray launchdLabels)
+        (reloadShellArray systemdUnitNames)
+      ]
+      (builtins.readFile ../openclaw-reload.sh);
+  runtimePluginPackagesAll = lib.unique (
+    lib.flatten (map (item: item.runtimePluginPackages) instanceConfigs)
+  );
 
   appDefaults = lib.foldl' (acc: item: lib.recursiveUpdate acc item.appDefaults) { } instanceConfigs;
   appDefaultsEnabled = lib.filterAttrs (_: inst: inst.appDefaults.enable) enabledInstances;
@@ -374,9 +466,10 @@ in
         message = "OpenClaw config memory.backend = \"qmd\" requires a qmd package in openclawPackages.";
       }
     ]
-    ++ files.documentsAssertions
+    ++ files.workspaceAssertions
     ++ files.duplicateSkillAssertion
     ++ plugins.pluginAssertions
+    ++ lib.flatten (map (item: item.assertions) instanceConfigs)
     ++ [
       {
         assertion = !cfg.qmd.prewarmModels.enable || qmdPackage != null;
@@ -403,7 +496,7 @@ in
       (lib.optionalAttrs cfg.reloadScript.enable {
         ".local/bin/openclaw-reload" = {
           executable = true;
-          source = ../openclaw-reload.sh;
+          text = reloadScriptText;
         };
       })
     ];
@@ -417,11 +510,9 @@ in
       }
     '';
 
-    home.activation.openclawWorkspaceFiles = lib.mkIf (files.materializedEntries != [ ]) (
-      lib.hm.dag.entryAfter [ "openclawDirs" ] ''
-        run --quiet ${../openclaw-materialize-workspace-files.sh} ${lib.escapeShellArg "${homeDir}/.local/state/nix-openclaw/managed-workspace-files"} ${files.materializedManifest}
-      ''
-    );
+    home.activation.openclawWorkspaceFiles = lib.hm.dag.entryAfter [ "openclawDirs" ] ''
+      run --quiet ${../openclaw-materialize-workspace-files.sh} ${lib.escapeShellArg "${homeDir}/.local/state/nix-openclaw/managed-workspace-files"} ${files.materializedManifest}
+    '';
 
     home.activation.openclawConfigFiles = lib.hm.dag.entryAfter [ "openclawDirs" ] ''
       ${lib.concatStringsSep "\n" (
@@ -430,6 +521,16 @@ in
         ) instanceConfigs
       )}
     '';
+
+    home.activation.openclawRuntimePlugins = lib.mkIf (runtimePluginPackagesAll != [ ]) (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        ${lib.concatStringsSep "\n" (
+          map (
+            package: "run --quiet ${lib.getExe' pkgs.coreutils "test"} -f ${package}/openclaw.plugin.json"
+          ) runtimePluginPackagesAll
+        )}
+      ''
+    );
 
     home.activation.openclawCodexRuntimeProfiles = lib.mkIf (codexRuntimeProfileEntries != [ ]) (
       lib.hm.dag.entryAfter [ "openclawDirs" ] ''

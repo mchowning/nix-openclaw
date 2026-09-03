@@ -2,6 +2,7 @@
   lib,
   openclawLib,
   pluginOptionType,
+  runtimePluginSourceType,
 }:
 
 { name, config, ... }:
@@ -85,6 +86,18 @@
       type = lib.types.listOf pluginOptionType;
       default = openclawLib.effectivePlugins;
       description = "Plugins enabled for this instance (includes bundled plugin toggles).";
+    };
+
+    runtimePlugins = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = openclawLib.cfg.runtimePlugins;
+      description = "Supported OpenClaw runtime plugin ids for this instance. Overrides the top-level runtimePlugins list when set.";
+    };
+
+    runtimePluginSources = lib.mkOption {
+      type = lib.types.listOf runtimePluginSourceType;
+      default = openclawLib.cfg.runtimePluginSources;
+      description = "Locked OpenClaw runtime plugin sources for this instance. Overrides the top-level runtimePluginSources list when set.";
     };
 
     config = lib.mkOption {

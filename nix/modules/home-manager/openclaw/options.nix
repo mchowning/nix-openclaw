@@ -11,32 +11,97 @@ let
     options = {
       source = lib.mkOption {
         type = lib.types.str;
-        description = "Plugin source. Use a plugin flake source (github:/path:) or an OpenClaw npm install source (npm:@scope/package@version).";
+        description = "nix-openclaw plugin source. Use a plugin flake source (github:/path:). OpenClaw npm and ClawHub runtime plugins use programs.openclaw.runtimePlugins or runtimePluginSources.";
       };
       config = lib.mkOption {
         type = lib.types.attrs;
         default = { };
-        description = "Nix capability plugin configuration (env/files/etc). Runtime OpenClaw plugin config belongs under programs.openclaw.config.plugins.entries.<id>.config.";
+        description = "nix-openclaw plugin configuration (env/files/etc). Runtime OpenClaw plugin config belongs under programs.openclaw.config.plugins.entries.<id>.config.";
       };
       id = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
-        description = "OpenClaw runtime plugin id. Required for npm: sources so Nix can enable the plugin without build-time introspection.";
+        description = "Unsupported legacy field for npm: runtime plugin sources.";
       };
       enabled = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = "Default enabled state for an OpenClaw runtime plugin entry.";
+        description = "Unsupported legacy field for npm: runtime plugin sources.";
       };
       hash = lib.mkOption {
         type = lib.types.str;
         default = lib.fakeHash;
-        description = "Recursive output hash for npm: runtime plugin sources. Use the hash Nix reports when this is left as lib.fakeHash.";
+        description = "Unsupported legacy field for npm: runtime plugin sources.";
       };
     };
   };
-  instanceModule = import ./options-instance.nix { inherit lib openclawLib pluginOptionType; };
+  runtimePluginSourceType = lib.types.submodule {
+    options = {
+      id = lib.mkOption {
+        type = lib.types.str;
+        description = "OpenClaw plugin id from openclaw.plugin.json.";
+      };
+      spec = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "npm:@scope/openclaw-plugin@1.2.3";
+        description = "Exact npm: or clawhub: plugin source spec. Use an exact version, not latest or a dist-tag.";
+      };
+      url = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Direct HTTPS npm-pack tarball URL. Use this only when npm: or clawhub: resolution is not the desired source.";
+      };
+      hash = lib.mkOption {
+        type = lib.types.str;
+        default = lib.fakeHash;
+        description = "Nix hash for the resolved plugin tarball. Start with lib.fakeHash and replace it with the hash Nix reports.";
+      };
+      npmDepsHash = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Nix npm dependency hash for shrinkwrapped plugins. Set to lib.fakeHash when the build asks for it, then replace it with the suggested hash.";
+      };
+    };
+  };
+  instanceModule = import ./options-instance.nix {
+    inherit
+      lib
+      openclawLib
+      pluginOptionType
+      runtimePluginSourceType
+      ;
+  };
   pluginCatalog = import ./plugin-catalog.nix;
+  bootstrapFilesOptionType = lib.types.submodule {
+    options = {
+      agents = lib.mkOption {
+        type = lib.types.path;
+        description = "Source file for the Nix-managed workspace AGENTS.md bootstrap file.";
+      };
+      soul = lib.mkOption {
+        type = lib.types.path;
+        description = "Source file for the Nix-managed workspace SOUL.md bootstrap file.";
+      };
+      tools = lib.mkOption {
+        type = lib.types.path;
+        description = "Source file for the authored TOOLS.md content. nix-openclaw appends the generated Nix tool inventory.";
+      };
+      identity = lib.mkOption {
+        type = lib.types.path;
+        description = "Source file for the Nix-managed workspace IDENTITY.md bootstrap file.";
+      };
+      user = lib.mkOption {
+        type = lib.types.path;
+        description = "Source file for the Nix-managed workspace USER.md bootstrap file.";
+      };
+      heartbeat = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Optional source file for a Nix-managed workspace HEARTBEAT.md bootstrap file.";
+      };
+    };
+  };
   mkSkillOption = lib.types.submodule {
     options = {
       name = lib.mkOption {
@@ -70,12 +135,12 @@ let
           "inline"
         ];
         default = "symlink";
-        description = "Install mode for the skill (symlink/copy/inline).";
+        description = "Skill source mode. inline renders body; symlink/copy import source as a Nix store skill directory and expose it through skills.load.extraDirs.";
       };
       source = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
-        description = "Source path for the skill (required for symlink/copy).";
+        description = "Source directory for symlink/copy skill modes. The directory must contain SKILL.md.";
       };
     };
   };
@@ -133,6 +198,18 @@ in
         default = true;
         description = "Pin agents.defaults.workspace to each instance workspaceDir when unset (prevents falling back to template ~/.openclaw/workspace).";
       };
+
+      bootstrapFiles = lib.mkOption {
+        type = lib.types.nullOr bootstrapFilesOptionType;
+        default = null;
+        description = "Explicit Nix-managed OpenClaw workspace bootstrap files. These files are materialized into each workspace as AGENTS.md, SOUL.md, TOOLS.md, IDENTITY.md, USER.md, and optional HEARTBEAT.md, and are replaced on activation.";
+      };
+
+      files = lib.mkOption {
+        type = lib.types.attrsOf lib.types.path;
+        default = { };
+        description = "Extra Nix-managed workspace files. These are copied into each workspace but are not OpenClaw bootstrap files and are not injected automatically by upstream OpenClaw.";
+      };
     };
 
     runtimePackages = lib.mkOption {
@@ -150,19 +227,42 @@ in
     documents = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = null;
-      description = "Path to a documents directory containing AGENTS.md, SOUL.md, and TOOLS.md.";
+      description = "Removed. Use programs.openclaw.workspace.bootstrapFiles and programs.openclaw.workspace.files.";
     };
 
     skills = lib.mkOption {
       type = lib.types.listOf mkSkillOption;
       default = [ ];
-      description = "Declarative skills installed into each instance workspace.";
+      description = "Declarative skills added to each instance's OpenClaw skill load paths.";
     };
 
     customPlugins = lib.mkOption {
       type = lib.types.listOf pluginOptionType;
       default = [ ];
-      description = "Custom/community plugins (merged with bundled plugin toggles). Flake sources provide Nix capability plugins; npm: sources provide OpenClaw runtime plugins.";
+      description = "Custom/community nix-openclaw plugins (merged with bundled plugin toggles).";
+    };
+
+    runtimePlugins = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [
+        "slack"
+        "discord"
+      ];
+      description = "Supported OpenClaw runtime plugin ids to package immutably and load through OpenClaw's plugins.load.paths.";
+    };
+
+    runtimePluginSources = lib.mkOption {
+      type = lib.types.listOf runtimePluginSourceType;
+      default = [ ];
+      example = [
+        {
+          id = "my-plugin";
+          spec = "npm:@scope/openclaw-plugin@1.2.3";
+          hash = lib.fakeHash;
+        }
+      ];
+      description = "Locked OpenClaw runtime plugin sources to package immutably and load through OpenClaw's plugins.load.paths.";
     };
 
     bundledPlugins = lib.mapAttrs (name: plugin: {
