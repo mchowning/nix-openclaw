@@ -104,6 +104,18 @@ function loadPublicArtifact() {
 if (!loadPublicArtifact()) {
   throw new Error("Bundled OpenAI provider policy artifact did not load");
 }
+
+const acpxDist = path.join(
+  process.env.OPENCLAW_GATEWAY,
+  "lib/openclaw/dist-runtime/extensions/acpx/dist",
+);
+const acpxConfigModules = fs.readdirSync(acpxDist)
+  .filter((name) => /^config-.*\.js$/.test(name))
+  .map((name) => path.join(acpxDist, name));
+if (acpxConfigModules.length !== 1) {
+  throw new Error(`Expected exactly one ACPX config module, found ${acpxConfigModules.length}`);
+}
+await import(pathToFileURL(acpxConfigModules[0]).href);
 NODE
 
 require_js_alias_target() {
