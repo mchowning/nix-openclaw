@@ -33,6 +33,11 @@ log_step() {
 
 log_step "copy package"
 cp -R "$package_root/." "$root/"
+log_step "copy runtime dependencies"
+mkdir -p "$root/node_modules"
+cp -R node_modules/. "$root/node_modules/"
+rm -rf "$root/node_modules/openclaw"
+rm -f "$root/node_modules/.bin/openclaw"
 log_step "patch npm dist"
 OPENCLAW_PACKAGE_ROOT="$root" "$NODE_BIN" "$OPENCLAW_PATCH_NPM_DIST_SCRIPT"
 
