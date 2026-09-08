@@ -3,9 +3,9 @@
   id = "pixverse";
   attrName = "pixverse";
   label = "PixVerse";
-  kind = "plugin";
+  kind = "provider";
   catalogSource = "official";
-  catalogFile = "official-external-plugin-catalog.json";
+  catalogFile = "official-external-provider-catalog.json";
   catalogEntryName = "@openclaw/pixverse-provider";
   catalogDefaultChoice = "npm";
   selectedSource = "npm";
@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.5.26";
   expectedIntegrity = "";
   packageName = "@openclaw/pixverse-provider";
-  version = "2026.7.1";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/pixverse-provider/-/pixverse-provider-2026.7.1.tgz";
-  npmIntegrity = "sha512-GlIUd37HZ9rA79SVNQfN0ZrFbH7I9aoxDAd3wO/UZg6RSVjfXoVpmDHsm6p38Lt3m7gPCao0TJKcGmVKiaUqKQ==";
-  npmShasum = "de5a7d53490fccf7ae5dcd3c9c16b05594a52fb9";
-  nixHash = "sha256-N5bF1Axd78/MA05vL2i3wRAnJK1sNKyR5ox1hTQW3cc=";
+  version = "2026.9.3";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/pixverse-provider/-/pixverse-provider-2026.9.3.tgz";
+  npmIntegrity = "sha512-+1dFQL8Rj721/AYNcpNuaXxjT80PhpYnb3o0ao3WSdcB77dc3SD/VRjYHUZxXlArjqruublpW3SO514iBCu2Iw==";
+  npmShasum = "8731f7c6b5bdb039e3073c2382664eae452b503e";
+  nixHash = "sha256-HzBTms/KU831f1DTkuCZx2O72ReofCiuSj/DonKWYq0=";
   dependencyMode = "none";
   manifestId = "pixverse";
-  openclawCompat = ">=2026.7.1";
-  peerOpenClaw = ">=2026.7.1";
+  openclawCompat = ">=2026.9.3";
+  peerOpenClaw = ">=2026.9.3";
   runtimeExtensions = [
     "./dist/index.js"
   ];

@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.5.12-beta.1";
   expectedIntegrity = "";
   packageName = "@openclaw/openshell-sandbox";
-  version = "2026.7.1";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/openshell-sandbox/-/openshell-sandbox-2026.7.1.tgz";
-  npmIntegrity = "sha512-LS5X0x8cuB2XRJJdhZlx+bYUuEtOzByUnr5VW/SA/sXvKbxxM1p5o0iZd2wJuDc9VB6rGGLtuqTaPr1pNegLsQ==";
-  npmShasum = "48a85fef296099469a50ace7e671e4699b1cb742";
-  nixHash = "sha256-jzh35UoRZ8FmZPl/+2wGZehA+fq1zhJ+J8LTiEL0vwM=";
+  version = "2026.9.3";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/openshell-sandbox/-/openshell-sandbox-2026.9.3.tgz";
+  npmIntegrity = "sha512-Dj0WquifVAsn9puMBT68GxAmJAcw8h2qz7s1O850SZlRh+mY6iVLLP4YkG7TK5NWj793Kso9wHFsSyJOR2AGNg==";
+  npmShasum = "2ca1355d26c1b2f4efb504bc189db0ca5a8327fb";
+  nixHash = "sha256-7b5IBbRa6O2v8GelfOlxfX4q7wF/c+4spZ4eTmXG07U=";
   dependencyMode = "bundled";
   manifestId = "openshell";
-  openclawCompat = ">=2026.7.1";
-  peerOpenClaw = ">=2026.7.1";
+  openclawCompat = ">=2026.9.3";
+  peerOpenClaw = ">=2026.9.3";
   runtimeExtensions = [
     "./dist/index.js"
   ];
@@ -29,13 +29,40 @@
   channels = [ ];
   contracts = { };
   dependencies = {
+    "@openclaw/fs-safe" = "0.8.5";
+    p-limit = "7.3.1";
     zod = "4.4.3";
   };
   optionalDependencies = { };
   bundleDependencies = [
+    "@openclaw/fs-safe"
+    "p-limit"
     "zod"
   ];
   bundledPackageRoots = [
+    "node_modules/@openclaw/fs-safe"
+    "node_modules/@openclaw/fs-safe-darwin-arm64"
+    "node_modules/@openclaw/fs-safe-darwin-x64"
+    "node_modules/@openclaw/fs-safe-linux-arm64-gnu"
+    "node_modules/@openclaw/fs-safe-linux-arm64-musl"
+    "node_modules/@openclaw/fs-safe-linux-x64-gnu"
+    "node_modules/@openclaw/fs-safe-linux-x64-musl"
+    "node_modules/@openclaw/fs-safe-win32-x64-msvc"
+    "node_modules/core-util-is"
+    "node_modules/immediate"
+    "node_modules/inherits"
+    "node_modules/isarray"
+    "node_modules/jszip"
+    "node_modules/lie"
+    "node_modules/p-limit"
+    "node_modules/pako"
+    "node_modules/process-nextick-args"
+    "node_modules/readable-stream"
+    "node_modules/safe-buffer"
+    "node_modules/setimmediate"
+    "node_modules/string_decoder"
+    "node_modules/util-deprecate"
+    "node_modules/yocto-queue"
     "node_modules/zod"
   ];
 }

@@ -13,16 +13,26 @@
   minHostVersion = ">=2026.5.28";
   expectedIntegrity = "";
   packageName = "@openclaw/copilot";
-  version = "2026.7.1";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/copilot/-/copilot-2026.7.1.tgz";
-  npmIntegrity = "sha512-w5wK8wEjqMxnZ+JkzidiEUn15SgNL/4CTBrAxCEt70l3seLFgedL0FTDgFOitYO+5Zg+ZQj4Z4foJaGIRF8riA==";
-  npmShasum = "054268c9ad1f1710ce7530c8f048ff8f54b5814f";
-  nixHash = "sha256-gNniTM0xc4KTv19dwsc8+EZCOqNkafq9bPAOoK5WlB4=";
-  dependencyMode = "shrinkwrap";
-  npmDepsHash = "sha256-dl8s2nJ8UkDF8LIHw/8Bk9nU+fsPZUP78x6H9jujYSs=";
+  version = "2026.9.3";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/copilot/-/copilot-2026.9.3.tgz";
+  npmIntegrity = "sha512-T56aerIGFrLpXib1DpFCKRBMGPqPR0sM5VDarJ7i5UuDob4RleEoE3IbKwhf8ORM1lzIWP57My4+7Z3en82amQ==";
+  npmShasum = "60d344d59a2a2755cf46a04015c5ccdbf822d409";
+  nixHash = "sha256-rZQt0JoiTufl66D+vB3WM9q/m4u7otCKS/wPGinAuF8=";
+  dependencyMode = "package-lock";
+  npmDepsHash = "sha256-rNgkN3hMKWYV/cY1HTYDAsBrbGh0y1KUvehtWBESJTA=";
+  npmPackageLockFile = "copilot.package-lock.json";
+  npmPackageLockSha256 = "b4f2f022b31573cdc0403d55f9d573fa622d313976b25dfcc6ce1f8483d171e6";
+  npmPackageLockEvidence = {
+    assetName = "openclaw-2026.9.3-dependency-evidence.zip";
+    assetUrl = "https://github.com/openclaw/openclaw/releases/download/v2026.9.3/openclaw-2026.9.3-dependency-evidence.zip";
+    assetNixHash = "sha256-u2QglamKuAGFt9eCYcC7pL79VnkViC+CZ+7qYkGz8gc=";
+    source = "release";
+    sourceSha = "1391f7cd2d40ab5bbcf2f5f831d3a64f520e72d7";
+    generatedAt = "2026-09-08T07:53:09.139Z";
+  };
   manifestId = "copilot";
-  openclawCompat = ">=2026.7.1";
-  peerOpenClaw = ">=2026.7.1";
+  openclawCompat = ">=2026.9.3";
+  peerOpenClaw = ">=2026.9.3";
   runtimeExtensions = [
     "./dist/index.js"
   ];
@@ -30,7 +40,7 @@
   channels = [ ];
   contracts = { };
   dependencies = {
-    "@github/copilot-sdk" = "1.0.5";
+    "@github/copilot-sdk" = "1.0.11";
   };
   optionalDependencies = { };
   bundleDependencies = [ ];

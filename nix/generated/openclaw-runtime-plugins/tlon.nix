@@ -13,16 +13,26 @@
   minHostVersion = ">=2026.4.10";
   expectedIntegrity = "";
   packageName = "@openclaw/tlon";
-  version = "2026.7.1";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/tlon/-/tlon-2026.7.1.tgz";
-  npmIntegrity = "sha512-EFTQAgagLJ/5a7/C6mBEwVBPA01zQa0PtGSvgL6HFLY3N5I/xEp1Vw94GxRff9mPQjDyU8t1v2FfKr15QrIuVg==";
-  npmShasum = "dfd148472263a8616749b2e0210d732ab06a9447";
-  nixHash = "sha256-SqP7iGXv2N/3ddqSDF5B9LY/+Nl2I46t9fK6MgvLIrE=";
-  dependencyMode = "shrinkwrap";
-  npmDepsHash = "sha256-TIPvLTPWHdXbk5Ua847gPlsq6LzNw2ZWY5Qy0MNUTFQ=";
+  version = "2026.9.3";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/tlon/-/tlon-2026.9.3.tgz";
+  npmIntegrity = "sha512-iiBZ7o4R1rPKIBYFJxiGvricu6T3Mxn2EHJDwpIH4tV//anPR1w77hda+NCmYQOmS509ZJfeLsGN5IBdU9lu8w==";
+  npmShasum = "504eceedabfb2527244c5dd0d4365dc155c806c7";
+  nixHash = "sha256-PuWMsVicUJmYs75gTTZ/DCVMDtGOl+ajD535bFckWJY=";
+  dependencyMode = "package-lock";
+  npmDepsHash = "sha256-R5oxuFsQKrK1DkMaezhH3WexAV1w5JYgZCM8Zrg5MoQ=";
+  npmPackageLockFile = "tlon.package-lock.json";
+  npmPackageLockSha256 = "02c7a87e79b6eb1f6fc22876f24d1e7135238013b29b40426c030d3f21296942";
+  npmPackageLockEvidence = {
+    assetName = "openclaw-2026.9.3-dependency-evidence.zip";
+    assetUrl = "https://github.com/openclaw/openclaw/releases/download/v2026.9.3/openclaw-2026.9.3-dependency-evidence.zip";
+    assetNixHash = "sha256-u2QglamKuAGFt9eCYcC7pL79VnkViC+CZ+7qYkGz8gc=";
+    source = "release";
+    sourceSha = "1391f7cd2d40ab5bbcf2f5f831d3a64f520e72d7";
+    generatedAt = "2026-09-08T07:53:09.139Z";
+  };
   manifestId = "tlon";
-  openclawCompat = ">=2026.7.1";
-  peerOpenClaw = ">=2026.7.1";
+  openclawCompat = ">=2026.9.3";
+  peerOpenClaw = ">=2026.9.3";
   runtimeExtensions = [
     "./dist/index.js"
   ];
@@ -32,9 +42,9 @@
   ];
   contracts = { };
   dependencies = {
-    "@aws-sdk/client-s3" = "3.1078.0";
-    "@aws-sdk/s3-request-presigner" = "3.1078.0";
-    "@tloncorp/tlon-skill" = "0.4.3";
+    "@aws-sdk/client-s3" = "3.1121.0";
+    "@aws-sdk/s3-request-presigner" = "3.1121.0";
+    "@tloncorp/tlon-skill" = "0.5.0";
     "@urbit/aura" = "3.0.0";
     zod = "4.4.3";
   };
