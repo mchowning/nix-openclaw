@@ -136,16 +136,20 @@ Do not put bare package names or unprefixed `@scope/package` strings in
 
 ### Dependency Rule
 
-The rule is simple: if a plugin has runtime npm dependencies, it must publish
-either bundled `node_modules` or `npm-shrinkwrap.json`. No bundled deps and no
-shrinkwrap means no Nix package.
+If a plugin has runtime npm dependencies, it must publish bundled
+`node_modules`, `npm-shrinkwrap.json`, or, for supported OpenClaw catalog
+plugins, upstream npm `package-lock.json` release evidence bound to the pinned
+release SHA. Without one of these, there is no reproducible Nix package.
 
 Regular OpenClaw can solve npm dependencies during `openclaw plugins install`.
 nix-openclaw cannot do a mutable dependency solve during `home-manager switch`.
 If a package has `npm-shrinkwrap.json`, nix-openclaw can replay that dependency
-graph with `npmDepsHash`. If it bundles `node_modules`, nix-openclaw validates
-and copies the bundled deps. If it has neither, ask the plugin author to publish
-shrinkwrap or bundled runtime deps.
+graph with `npmDepsHash`. For lockless OpenClaw catalog plugins, the pin updater
+can instead select the exact package name and version from the upstream
+`openclaw-<version>-dependency-evidence.zip` asset, record its lock and hashes,
+and replay it during the Nix build. If a plugin bundles `node_modules`,
+nix-openclaw validates and copies the bundled deps. Other plugin authors must
+publish shrinkwrap or bundled runtime deps.
 
 ### npm and ClawHub Sources
 
@@ -465,11 +469,21 @@ When you run `home-manager switch`:
    - What CLI packages to install
    - What skill directories to expose
    - What environment variables it needs
-3. Tools go on the gateway PATH, skills are added to OpenClaw's `skills.load.extraDirs`
+3. Tools go on the gateway PATH. Activation copies Nix-managed skills to per-instance runtime directories and adds those directories to OpenClaw's `skills.load.extraDirs`.
 4. A launchd (macOS) or systemd user service (Linux) is created/updated to run the gateway
 5. The gateway starts, loads skills, connects to your providers
 
-All state lives in `~/.openclaw/`. Logs at `/tmp/openclaw/openclaw-gateway.log`.
+Gateway state defaults to `~/.openclaw/`. Logs are at `/tmp/openclaw/openclaw-gateway.log`.
+
+Nix remains the source of truth for configured user and plugin skills. Activation
+copies them into `~/.local/share/nix-openclaw/skills/<instance>/<skill>` so
+OpenClaw can read user-owned files with one hard link, even when the Nix store
+is deduplicated. Some directory names are encoded to keep instances and skills distinct across filesystems.
+All agents in an instance share these load paths; user-supplied
+`skills.load.extraDirs` stay unchanged. Activation refreshes copies on upgrades
+and rollbacks, and removes undeclared skills only within currently enabled
+instance roots. State from removed instances is preserved with a warning.
+Treat these copies as Nix-managed: edit the declared source and rebuild.
 
 </details>
 
@@ -722,6 +736,14 @@ Deliverables: flake output, env overrides, AGENTS.md, skill update.
 > When bootstrap files are configured, nix-openclaw forces `agents.defaults.skipBootstrap = true` so OpenClaw never seeds workspace bootstrap files from bundled templates.
 > `BOOTSTRAP.md` and `MEMORY.md` are runtime-owned, not managed by `workspace.files`.
 
+Workspace activation replaces declared files and removes stale managed paths only
+below currently enabled instances' configured `workspaceDir` roots. Paths that
+escape through a parent symlink are rejected. If you move a workspace or remove
+an instance, old paths outside the remaining roots are preserved with a warning
+and retained in `~/.local/state/nix-openclaw/managed-workspace-files` for manual
+inspection and cleanup. An empty set of declared files still cleans up stale
+files within configured workspaces.
+
 ### What OpenClaw needs (minimum)
 
 1. **Telegram bot token file** - create via [@BotFather](https://t.me/BotFather), set `channels.telegram.tokenFile`
@@ -899,6 +921,12 @@ Uses `instances.default` to unlock per-group mention rules. If `instances` is se
 ### Dual-instance setup (prod + dev)
 
 Use named instances when you need two local gateways. Keep the default package unless you are actively debugging a local gateway checkout.
+
+Config activation supports paths containing spaces, including a custom
+`instances.<name>.configPath`. A leading `~/` is resolved against the configured
+Home Manager home directory for activation, `home.file` destinations, the
+workspace pin, and launchd/systemd WorkingDirectory and environment paths.
+Systemd environment entries preserve spaces in the config and state paths.
 
 ```nix
 programs.openclaw = {

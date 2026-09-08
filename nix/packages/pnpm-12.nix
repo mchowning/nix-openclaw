@@ -1,6 +1,8 @@
 {
   lib,
+  stdenv,
   stdenvNoCC,
+  autoPatchelfHook,
   fetchurl,
   nodejs_22,
 }:
@@ -10,11 +12,11 @@ let
     {
       aarch64-darwin = {
         package = "exe.darwin-arm64";
-        hash = "sha256-Qu/s8ydbt1gZMsY20LODsSRJBYWnKUM0C/jBh8OFcKE=";
+        hash = "sha256-9UrTZ9ikLa+dhIMOS9akXAlX4OMoekXaCMOguNBOx/c=";
       };
       x86_64-linux = {
         package = "exe.linux-x64";
-        hash = "sha256-qiizYKMCcFxd18YQTrQsDExEgMnghoYiCgiU+iIh+2w=";
+        hash = "sha256-mxyV/EE2AMp1pR6+gzLXAZ3DVo/UGH9aXy30oVbvtlw=";
       };
     }
     .${stdenvNoCC.hostPlatform.system}
@@ -22,12 +24,15 @@ let
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "pnpm";
-  version = "12.1.0";
+  version = "12.3.4";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@pnpm/${platformSource.package}/-/${platformSource.package}-${finalAttrs.version}.tgz";
     hash = platformSource.hash;
   };
+
+  nativeBuildInputs = lib.optionals stdenv.hostPlatform.isLinux [ autoPatchelfHook ];
+  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [ stdenv.cc.cc.lib ];
 
   installPhase = ''
     runHook preInstall

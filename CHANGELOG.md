@@ -8,6 +8,35 @@ This changelog starts with the current pre-1.0 nix-openclaw Home Manager module
 API transition.
 Older repository history is available in git.
 
+## Unreleased
+
+**Highlights:** Nix-managed skills remain discoverable with OpenClaw’s hardlink checks, and documented home-relative paths work consistently across Home Manager activation and gateway services. Changes below cover the package state since `v2026.7.1`.
+
+- Materialize configured user and plugin skills as per-instance runtime copies, preserving all-agent discovery, extra load paths, and cleanup boundaries; thanks @vsumner (#118).
+- Resolve leading `~/` in instance state, workspace, and config paths consistently for managed files, runtime profiles, and launchd/systemd services, including paths containing spaces and quotes; thanks @SebTardif (#130).
+- Support packaging OpenClaw 2026.8.1+ lockless runtime plugins once upstream ships npm package-lock release evidence, with dependencies bound to the pinned release SHA (2026-09-06).
+- Regenerate the gateway npm wrapper lock from scratch on every stable pin refresh and validate it offline before `npm ci`; updating the previous release's lock in place left OpenClaw 2026.9.x without its hoisted `p-limit@7` dependency and failed the Nix gateway build with ENOTCACHED (2026-09-07).
+- Fix Home Manager config symlink activation and systemd environment quoting for paths containing spaces, while preserving home-relative `~/` symlink destinations; thanks @SebTardif (#122).
+- Constrain workspace cleanup and replacement to configured roots, preserve stale paths from removed or moved instances with a warning, avoid changing symlink targets or hardlinked file permissions, and create home-relative workspace paths containing spaces correctly; thanks @SebTardif (#119, #120).
+- Keep OpenClaw's private pnpm tools out of the consumer Nixpkgs overlay, support pnpm 12 releases, update the private runtimes to pnpm 11.26.0 and 12.3.4, and fix the pnpm 12 Linux executable's loader and runtime libraries; thanks @jerome-benoit (#116, #117, #121).
+- Restart the configured launchd labels and systemd user units with `openclaw-reload` instead of the old hardcoded labels.
+- Package upstream OpenClaw `2026.7.1-2`, retain runtime plugin version `2026.7.1` for correction releases, and repair the macOS `2026.7.1` app artifact hash; thanks @vincentkoc.
+- Preserve canonical scoped npm package encoding and fully escape generated CI table cells; thanks @vincentkoc (#114).
+- Document declarative Gmail hook session keys and their allowed prefix to prevent rejected callbacks (#113).
+- Refresh Nixpkgs, Home Manager, the packaged OpenClaw tools, and the Linux QMD memory backend to 2.8.3, keeping bundled tool plugin sources aligned with the flake lock.
+- Refresh CI checkout to 7.0.1 and the Nix installer to 31.11.1, which fixes a Nix build crash.
+
+## 2026-09-04
+
+### Changed
+
+- Update the private pnpm 11 and 12 tools to 11.25.0 and 12.3.1, with Linux/macOS checks for offline installs and frozen lockfiles. Keep the existing Node.js 22 runtime and Nixpkgs overlay boundary.
+
+### Fixed
+
+- Patch the native pnpm 12 Linux executable to use the Nix loader and runtime libraries, so its public package output runs inside the Nix sandbox.
+- Constrain workspace activation cleanup and replacement to configured workspace roots, preserve stale paths from removed or moved instances with a warning, and avoid changing symlink targets or hardlinked file permissions during cleanup. Create home-relative workspace paths containing spaces correctly during activation. Thanks @SebTardif (#119).
+
 ## 2026-08-30
 
 ### Fixed

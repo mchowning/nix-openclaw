@@ -53,9 +53,24 @@ pkgs.testers.nixosTest {
                 };
                 files."LORE.md" = ../tests/workspace/LORE.md;
               };
+              skills = [
+                {
+                  name = "activation-skill";
+                  mode = "inline";
+                  description = "Synthetic activation fixture";
+                }
+                {
+                  name = "copied-skill";
+                  mode = "copy";
+                  source = toString ../tests/plugins/alpha/skill;
+                }
+              ];
               installApp = false;
               launchd.enable = false;
               instances.default = {
+                stateDir = "~/openclaw state";
+                configPath = "~/openclaw state/config with spaces and 'quotes'.json";
+                workspaceDir = "~/custom workspace";
                 gatewayPort = 18999;
                 config = {
                   logging = {

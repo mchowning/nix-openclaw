@@ -15,9 +15,25 @@
   programs.openclaw = {
     enable = true;
     installApp = false;
+    skills = [
+      {
+        name = "activation-skill";
+        mode = "inline";
+        description = "Synthetic activation fixture";
+      }
+      {
+        name = "copied-skill";
+        mode = "copy";
+        source = toString ../plugins/alpha/skill;
+      }
+    ];
+    workspace.files."LORE.md" = ../workspace/LORE.md;
     runtimePackages = [ pkgs.jq ];
     environment.OPENCLAW_TEST_SECRET = "/tmp/openclaw-secret";
     instances.default = {
+      stateDir = "~/openclaw state";
+      configPath = "~/openclaw state/config with spaces and 'quotes'.json";
+      workspaceDir = "~/custom workspace";
       gatewayPort = 18999;
       logPath = "/tmp/hm-activation-home/.openclaw/openclaw-gateway.log";
       launchd.label = "com.steipete.openclaw.gateway.hm-test";

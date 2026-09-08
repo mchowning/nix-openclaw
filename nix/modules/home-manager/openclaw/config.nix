@@ -69,6 +69,15 @@ let
       plugins
       ;
   };
+  skills = import ./skills.nix {
+    inherit
+      lib
+      pkgs
+      openclawLib
+      enabledInstances
+      plugins
+      ;
+  };
   runtimePlugins = import ./runtime-plugins.nix { inherit lib pkgs; };
 
   stripNulls =
@@ -103,6 +112,9 @@ let
   mkInstanceConfig =
     name: inst:
     let
+      stateDir = openclawLib.resolvePath inst.stateDir;
+      workspaceDir = openclawLib.resolvePath inst.workspaceDir;
+      configPath = openclawLib.resolvePath inst.configPath;
       gatewayPackage =
         if inst.gatewayPath != null then
           pkgs.callPackage ../../../packages/openclaw-gateway.nix {
@@ -135,7 +147,7 @@ let
           plugin = "runtime";
         }) (cfg.environment // inst.environment));
       userConfig = stripNulls (lib.recursiveUpdate (stripNulls cfg.config) (stripNulls inst.config));
-      nixSkillLoadDirs = files.skillLoadDirsForInstance name;
+      nixSkillLoadDirs = skills.skillLoadDirsForInstance name;
       mergedConfigWithoutLoadPaths = stripNulls (lib.recursiveUpdate baseConfig userConfig);
       existingOpenClawPluginLoadPaths = (
         ((mergedConfigWithoutLoadPaths.plugins or { }).load or { }).paths or [ ]
@@ -205,7 +217,7 @@ let
           lib.recursiveUpdate mergedConfig0 {
             agents = {
               defaults = {
-                workspace = inst.workspaceDir;
+                workspace = workspaceDir;
               };
             };
           }
@@ -242,7 +254,7 @@ let
         in
         lib.unique ([ "main" ] ++ configured);
       codexRuntimeProfiles = map (
-        agentId: "${inst.stateDir}/agents/${agentId}/agent/codex-home/home/.nix-profile"
+        agentId: "${stateDir}/agents/${agentId}/agent/codex-home/home/.nix-profile"
       ) agentIds;
       gatewayWrapper = pkgs.writeShellScriptBin "openclaw-gateway-${name}" ''
         set -euo pipefail
@@ -302,7 +314,7 @@ let
     {
       name = name;
       homeFile = {
-        name = openclawLib.toRelative inst.configPath;
+        name = openclawLib.toRelative configPath;
         value = {
           source = configFile;
           text = builtins.unsafeDiscardStringContext configJson;
@@ -310,13 +322,13 @@ let
         };
       };
       configFile = configFile;
-      configPath = inst.configPath;
+      configPath = configPath;
       codexRuntimeProfiles = codexRuntimeProfiles;
       runtimeProfile = runtimeProfile;
 
       dirs = [
-        inst.stateDir
-        inst.workspaceDir
+        stateDir
+        workspaceDir
         (builtins.dirOf inst.logPath)
       ];
 
@@ -333,13 +345,13 @@ let
             ];
             RunAtLoad = true;
             KeepAlive = true;
-            WorkingDirectory = inst.stateDir;
+            WorkingDirectory = stateDir;
             StandardOutPath = inst.logPath;
             StandardErrorPath = inst.logPath;
             EnvironmentVariables = {
               HOME = homeDir;
-              OPENCLAW_CONFIG_PATH = inst.configPath;
-              OPENCLAW_STATE_DIR = inst.stateDir;
+              OPENCLAW_CONFIG_PATH = configPath;
+              OPENCLAW_STATE_DIR = stateDir;
               OPENCLAW_IMAGE_BACKEND = "sips";
               OPENCLAW_NIX_MODE = "1";
             }
@@ -357,13 +369,14 @@ let
           };
           Service = {
             ExecStart = "${gatewayWrapper}/bin/openclaw-gateway-${name} gateway --port ${toString inst.gatewayPort}";
-            WorkingDirectory = inst.stateDir;
+            WorkingDirectory = stateDir;
             Restart = "always";
             RestartSec = "1s";
-            Environment = [
+            # Systemd needs whole quoted items, not shell quote concatenation.
+            Environment = map builtins.toJSON [
               "HOME=${homeDir}"
-              "OPENCLAW_CONFIG_PATH=${inst.configPath}"
-              "OPENCLAW_STATE_DIR=${inst.stateDir}"
+              "OPENCLAW_CONFIG_PATH=${configPath}"
+              "OPENCLAW_STATE_DIR=${stateDir}"
               "OPENCLAW_NIX_MODE=1"
             ]
             ++ lib.optional disablePersistedPluginRegistry "OPENCLAW_DISABLE_PERSISTED_PLUGIN_REGISTRY=1";
@@ -467,7 +480,7 @@ in
       }
     ]
     ++ files.workspaceAssertions
-    ++ files.duplicateSkillAssertion
+    ++ skills.duplicateSkillAssertion
     ++ plugins.pluginAssertions
     ++ lib.flatten (map (item: item.assertions) instanceConfigs)
     ++ [
@@ -502,22 +515,32 @@ in
     ];
 
     home.activation.openclawDirs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      run --quiet ${lib.getExe' pkgs.coreutils "mkdir"} -p ${
-        lib.concatStringsSep " " (lib.concatMap (item: item.dirs) instanceConfigs)
+      run --quiet ${lib.getExe' pkgs.coreutils "mkdir"} -p -- ${
+        lib.escapeShellArgs (
+          map openclawLib.resolvePath (lib.concatMap (item: item.dirs) instanceConfigs)
+        )
       }
       ${lib.optionalString (plugins.pluginStateDirsAll != [ ])
-        "run --quiet ${lib.getExe' pkgs.coreutils "mkdir"} -p ${lib.concatStringsSep " " plugins.pluginStateDirsAll}"
+        "run --quiet ${lib.getExe' pkgs.coreutils "mkdir"} -p -- ${lib.escapeShellArgs plugins.pluginStateDirsAll}"
       }
     '';
 
     home.activation.openclawWorkspaceFiles = lib.hm.dag.entryAfter [ "openclawDirs" ] ''
-      run --quiet ${../openclaw-materialize-workspace-files.sh} ${lib.escapeShellArg "${homeDir}/.local/state/nix-openclaw/managed-workspace-files"} ${files.materializedManifest}
+      run --quiet ${../openclaw-materialize-workspace-files.sh} ${lib.escapeShellArg "${homeDir}/.local/state/nix-openclaw/managed-workspace-files"} ${files.materializedManifest} ${files.workspaceRootsManifest}
+    '';
+
+    home.activation.openclawSkills = lib.hm.dag.entryAfter [ "openclawDirs" ] ''
+      ${lib.optionalString (skills.roots != [ ])
+        "run --quiet ${lib.getExe' pkgs.coreutils "mkdir"} -p -- ${lib.escapeShellArgs skills.roots}"
+      }
+      run --quiet ${../openclaw-materialize-workspace-files.sh} ${lib.escapeShellArg "${homeDir}/.local/state/nix-openclaw/managed-skill-files"} ${skills.materializedManifest} ${skills.rootsManifest}
     '';
 
     home.activation.openclawConfigFiles = lib.hm.dag.entryAfter [ "openclawDirs" ] ''
       ${lib.concatStringsSep "\n" (
         map (
-          item: "run --quiet ${lib.getExe' pkgs.coreutils "ln"} -sfn ${item.configFile} ${item.configPath}"
+          item:
+          "run --quiet ${lib.getExe' pkgs.coreutils "ln"} -sfn ${lib.escapeShellArg item.configFile} ${lib.escapeShellArg (openclawLib.resolvePath item.configPath)}"
         ) instanceConfigs
       )}
     '';

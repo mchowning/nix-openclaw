@@ -63,7 +63,7 @@ pin_file_paths() {
   {
     git -C "$repo_root" ls-files -- "$runtime_plugin_lock_rel_dir"
     if [[ -d "$runtime_plugin_lock_dir" ]]; then
-      find "$runtime_plugin_lock_dir" -maxdepth 1 -type f \( -name '*.nix' -o -name 'report.json' \) -print \
+      find "$runtime_plugin_lock_dir" -maxdepth 1 -type f \( -name '*.nix' -o -name '*.package-lock.json' -o -name 'report.json' \) -print \
         | sed "s|^$repo_root/||"
     fi
   } | sort -u
@@ -95,16 +95,39 @@ refresh_npm_wrapper_locks() {
 
   update_wrapper_package_version "$gateway_npm_wrapper_dir/package.json" "openclaw" "$source_version"
 
-  rm -rf "$gateway_npm_wrapper_dir/node_modules"
+  # Resolve the wrapper lock from scratch. Updating the previous release's lock
+  # in place lets npm (10 and 11) keep a stale nested transitive package, such
+  # as openclaw/node_modules/p-limit@2.x, as the target of a new direct
+  # dependency edge (openclaw -> p-limit@^7) and drop the hoisted package, which
+  # then fails `npm ci` with ENOTCACHED inside the Nix sandbox.
+  rm -rf "$gateway_npm_wrapper_dir/node_modules" "$gateway_npm_wrapper_dir/package-lock.json"
   nix shell --extra-experimental-features "nix-command flakes" --accept-flake-config --inputs-from "$repo_root" \
     nixpkgs#nodejs_22 -c \
     bash -euo pipefail -c "cd '$gateway_npm_wrapper_dir' && npm install --package-lock-only --ignore-scripts --omit=dev --legacy-peer-deps"
+  OPENCLAW_NPM_WRAPPER_DIR="$gateway_npm_wrapper_dir" \
+    nix shell --extra-experimental-features "nix-command flakes" --accept-flake-config --inputs-from "$repo_root" \
+    nixpkgs#nodejs_22 -c \
+    "$repo_root/nix/scripts/check-openclaw-npm-wrapper-lock.sh"
 }
 
 refresh_runtime_plugin_locks() {
   nix shell --extra-experimental-features "nix-command flakes" --accept-flake-config --inputs-from "$repo_root" \
-    nixpkgs#nodejs_22 -c \
+    nixpkgs#nodejs_22 nixpkgs#unzip -c \
     node "$repo_root/nix/scripts/update-openclaw-runtime-plugin-locks.mjs"
+  track_new_runtime_plugin_locks
+}
+
+# Flake builds later in apply (gateway, plugin probes) copy only Git-tracked
+# files, so freshly generated lock sidecars must be registered with the index
+# before the first build reads them. The workflow repeats this for all pin files.
+track_new_runtime_plugin_locks() {
+  local -a new_files=()
+  while IFS= read -r file; do
+    new_files+=("$file")
+  done < <(git -C "$repo_root" ls-files --others --exclude-standard -- "$runtime_plugin_lock_rel_dir")
+  if [[ ${#new_files[@]} -gt 0 ]]; then
+    git -C "$repo_root" add --intent-to-add -- "${new_files[@]}"
+  fi
 }
 
 validate_runtime_plugin_locks() {
@@ -117,6 +140,9 @@ validate_runtime_plugin_locks() {
   if ! OPENCLAW_RUNTIME_PLUGIN_LOCK_DIR="$runtime_plugin_lock_dir" \
     OPENCLAW_RUNTIME_PLUGIN_LOCKS_JSON="$locks_json" \
     OPENCLAW_SOURCE_INFO_PATH="$source_file" \
+    OPENCLAW_RUNTIME_PLUGIN_VERIFY_EVIDENCE_ASSET=1 \
+    nix shell --extra-experimental-features "nix-command flakes" --accept-flake-config --inputs-from "$repo_root" \
+    nixpkgs#nodejs_22 nixpkgs#unzip -c \
     node "$repo_root/nix/scripts/check-openclaw-runtime-plugin-locks.mjs"; then
     rm -f "$locks_json"
     return 1

@@ -151,7 +151,7 @@ let
     in
     qmdPath != "";
   isPluginSkillPath =
-    path: lib.hasSuffix "/skill" path || lib.hasSuffix "-openclaw-plugin-skill-skill" path;
+    path: path == "/tmp/.local/share/nix-openclaw/skills/default/skill";
 
   defaultEval = moduleEval { };
   defaultConfig = generatedConfig defaultEval ".openclaw/openclaw.json";
@@ -169,6 +169,88 @@ let
     else
       "ok"
   );
+
+  homeRelativeConfigEval = moduleEval {
+    instances.default.stateDir = "~/openclaw state";
+  };
+  homeRelativeConfigCheckFor = eval:
+    let
+      activation = eval.config.home.activation.openclawConfigFiles.data;
+      homeFile = eval.config.home.file;
+      generated =
+        if builtins.hasAttr "openclaw state/openclaw.json" homeFile then
+          generatedConfig eval "openclaw state/openclaw.json"
+        else
+          { };
+      systemdService =
+        if pkgs.stdenv.hostPlatform.isLinux then
+          eval.config.systemd.user.services.openclaw-gateway.Service or { }
+        else
+          { };
+      launchdConfig =
+        if pkgs.stdenv.hostPlatform.isDarwin then
+          eval.config.launchd.agents."com.steipete.openclaw.gateway".config or { }
+        else
+          { };
+    in
+    if !(lib.hasInfix " '/tmp/openclaw state/openclaw.json'" activation) then
+      throw "Config activation must resolve home-relative paths before shell escaping."
+    else if builtins.hasAttr "~/openclaw state/openclaw.json" homeFile then
+      throw "home.file still uses an unresolved ~/ config destination."
+    else if !(builtins.hasAttr "openclaw state/openclaw.json" homeFile) then
+      throw "home.file must materialize the resolved config path, not a literal ~/ destination."
+    else if (((generated.agents or { }).defaults or { }).workspace or null) != "/tmp/openclaw state/workspace" then
+      throw "Workspace pin must resolve home-relative workspaceDir."
+    else if pkgs.stdenv.hostPlatform.isLinux && ((systemdService.WorkingDirectory or "") != "/tmp/openclaw state") then
+      throw "Systemd WorkingDirectory must resolve home-relative stateDir."
+    else if
+      pkgs.stdenv.hostPlatform.isLinux
+      && !(lib.elem "\"OPENCLAW_STATE_DIR=/tmp/openclaw state\"" (systemdService.Environment or [ ]))
+    then
+      throw "Systemd OPENCLAW_STATE_DIR must resolve home-relative stateDir."
+    else if
+      pkgs.stdenv.hostPlatform.isLinux
+      && !(lib.elem "\"OPENCLAW_CONFIG_PATH=/tmp/openclaw state/openclaw.json\"" (
+        systemdService.Environment or [ ]
+      ))
+    then
+      throw "Systemd OPENCLAW_CONFIG_PATH must resolve home-relative configPath."
+    else if pkgs.stdenv.hostPlatform.isDarwin && ((launchdConfig.WorkingDirectory or "") != "/tmp/openclaw state") then
+      throw "launchd WorkingDirectory must resolve home-relative stateDir."
+    else if
+      pkgs.stdenv.hostPlatform.isDarwin
+      && (((launchdConfig.EnvironmentVariables or { }).OPENCLAW_STATE_DIR or null) != "/tmp/openclaw state")
+    then
+      throw "launchd OPENCLAW_STATE_DIR must resolve home-relative stateDir."
+    else if
+      pkgs.stdenv.hostPlatform.isDarwin
+      && (
+        ((launchdConfig.EnvironmentVariables or { }).OPENCLAW_CONFIG_PATH or null)
+        != "/tmp/openclaw state/openclaw.json"
+      )
+    then
+      throw "launchd OPENCLAW_CONFIG_PATH must resolve home-relative configPath."
+    else
+      "ok";
+
+  homeRelativeConfigCheck = homeRelativeConfigCheckFor homeRelativeConfigEval;
+  topLevelHomeRelativeConfigCheck = homeRelativeConfigCheckFor (moduleEval {
+    stateDir = "~/openclaw state";
+  });
+
+  spacedConfigEval = moduleEval {
+    instances.default.configPath = "/tmp/openclaw state/config 'file'.json";
+  };
+  spacedConfigEnvironmentCheck =
+    if
+      pkgs.stdenv.hostPlatform.isLinux
+      && !(lib.elem "\"OPENCLAW_CONFIG_PATH=/tmp/openclaw state/config 'file'.json\""
+        spacedConfigEval.config.systemd.user.services.openclaw-gateway.Service.Environment
+      )
+    then
+      throw "Systemd config environment must preserve paths containing spaces and quotes."
+    else
+      "ok";
 
   reloadHelperText =
     eval:
@@ -434,13 +516,57 @@ let
   userSkillCheck = builtins.deepSeq (requireNoAssertionFailures "user skills" userSkillEval) (
     if !(lib.elem "/tmp/user-skill-root" userSkillExtraDirs) then
       throw "User skills.load.extraDirs entry was not preserved."
-    else if generatedUserSkillExtraDirs == [ ] then
-      throw "Nix-managed raw skill was not added to skills.load.extraDirs."
+    else if !(lib.elem "/tmp/.local/share/nix-openclaw/skills/default/inline-skill" generatedUserSkillExtraDirs) then
+      throw "Nix-managed raw skill did not use its per-instance runtime copy."
+    else if !(lib.all (lib.hasPrefix "/tmp/.local/share/nix-openclaw/skills/default/") generatedUserSkillExtraDirs) then
+      throw "A default plugin skill escaped the instance runtime root."
     else if userSkillExtraDirs != generatedUserSkillExtraDirs ++ [ "/tmp/user-skill-root" ] then
       throw "User skills.load.extraDirs entries should remain after Nix-managed skill dirs."
     else
       "ok"
   );
+
+  namedSkillEval = moduleEval {
+    skills = [
+      {
+        name = "inline-skill";
+        mode = "inline";
+      }
+    ];
+    instances = {
+      prod = {
+        enable = true;
+        appDefaults.enable = false;
+      };
+      test = {
+        enable = true;
+        appDefaults.enable = false;
+      };
+    };
+  };
+  namedSkillConfigs = map (name: generatedConfig namedSkillEval ".openclaw-${name}/openclaw.json") [
+    "prod"
+    "test"
+  ];
+  namedSkillCheck = builtins.deepSeq (requireNoAssertionFailures "named instance skills" namedSkillEval) (
+    if map (value: lib.filter (lib.hasSuffix "/inline-skill") value.skills.load.extraDirs) namedSkillConfigs != [
+      [ "/tmp/.local/share/nix-openclaw/skills/prod/inline-skill" ]
+      [ "/tmp/.local/share/nix-openclaw/skills/test/inline-skill" ]
+    ] then
+      throw "Named instances did not isolate their runtime skill copies."
+    else
+      "ok"
+  );
+
+  caseSkillEval = moduleEval {
+    skills = map (name: { inherit name; mode = "inline"; }) [ "Case" "case" ];
+  };
+  caseSkillConfig = generatedConfig caseSkillEval ".openclaw/openclaw.json";
+  caseSkillCheck =
+    if lib.length (lib.unique (map lib.toLower caseSkillConfig.skills.load.extraDirs)) != lib.length caseSkillConfig.skills.load.extraDirs then
+      throw "Case-distinct skills collide on case-insensitive home filesystems."
+    else
+      "ok";
 
   bootstrapFiles = {
     agents = ../tests/workspace/AGENTS.md;
@@ -980,10 +1106,15 @@ let
   checkKey = builtins.deepSeq (
     [
       defaultCheck
+      homeRelativeConfigCheck
+      topLevelHomeRelativeConfigCheck
+      spacedConfigEnvironmentCheck
       reloadDefaultCheck
       reloadNamedCheck
       reloadCustomDefaultCheck
       userSkillCheck
+      namedSkillCheck
+      caseSkillCheck
       workspaceBootstrapCheck
       documentsRemovedCheck
       bootstrapSeedConflictCheck
