@@ -93,3 +93,19 @@
      return false;
    }
    return true;
+diff --git a/src/plugins/package-entry-resolution.ts b/src/plugins/package-entry-resolution.ts
+index e4e5aae..4ee8f11 100644
+--- a/src/plugins/package-entry-resolution.ts
++++ b/src/plugins/package-entry-resolution.ts
+@@ -13,2 +13,3 @@
++import { isTrustedNixStorePluginRoot } from "./hardlink-policy.js";
+ import { checkPluginCacheEntry, pluginCacheExistsSync } from "./plugin-cache-files.js";
+ import type { PluginOrigin } from "./plugin-origin.types.js";
+@@ -117,6 +118,7 @@ async function validatePackageExtensionEntry(params: {
+     absolutePath,
+     rootPath: params.packageDir,
+     boundaryLabel: "plugin package directory",
++    rejectHardlinks: !isTrustedNixStorePluginRoot({ rootDir: params.packageDir, env: process.env }),
+   });
+   if (!opened.ok) {
+     return matchRootFileOpenFailure(opened, {

@@ -9,7 +9,7 @@ import vm from "node:vm";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-source-patch-"));
 try {
   fs.mkdirSync(path.join(root, "src/plugins"), { recursive: true });
-  for (const name of ["discovery.ts", "hardlink-policy.ts"]) {
+  for (const name of ["discovery.ts", "hardlink-policy.ts", "package-entry-resolution.ts"]) {
     fs.copyFileSync(path.join(process.env.OPENCLAW_SOURCE, "src/plugins", name), path.join(root, "src/plugins", name));
   }
   const patched = spawnSync("patch", ["--batch", "--fuzz=0", "-p1", "-i", process.env.OWNERSHIP_PATCH], { cwd: root, encoding: "utf8" });
@@ -46,6 +46,36 @@ try {
   assert.equal(context.findCandidateBlockIssue(params("/nix/store/plugin", "1")).reason, "path_stat_failed");
   assert.equal(context.shouldRejectHardlinkedPluginFiles(params("/nix/store/plugin", "1")), false);
   assert.equal(context.shouldRejectHardlinkedPluginFiles(params("/tmp/plugin", "1")), true);
+
+  const packageEntries = fs.readFileSync(path.join(root, "src/plugins/package-entry-resolution.ts"), "utf8");
+  const entryStart = packageEntries.indexOf("async function validatePackageExtensionEntry(");
+  const entryEnd = packageEntries.indexOf("async function validatePackageEntryForInstall(", entryStart);
+  assert.ok(entryStart >= 0 && entryEnd > entryStart);
+  vm.runInContext(stripTypeScriptTypes(packageEntries.slice(entryStart, entryEnd)), context);
+  let openParams;
+  context.resolveRootPath = async () => ({ exists: true });
+  context.fs.closeSync = () => {};
+  context.openRootFile = async (input) => {
+    openParams = input;
+    return { ok: true, fd: 1 };
+  };
+  context.matchRootFileOpenFailure = () => assert.fail("successful fixture must not inspect failure");
+  context.process.env = { OPENCLAW_NIX_MODE: "1" };
+  await context.validatePackageExtensionEntry({
+    packageDir: "/nix/store/plugin",
+    entry: "index.js",
+    label: "extension entry",
+    requireExisting: true,
+  });
+  assert.equal(openParams.rejectHardlinks, false);
+  context.process.env = { OPENCLAW_NIX_MODE: "0" };
+  await context.validatePackageExtensionEntry({
+    packageDir: "/nix/store/plugin",
+    entry: "index.js",
+    label: "extension entry",
+    requireExisting: true,
+  });
+  assert.equal(openParams.rejectHardlinks, true);
   console.log("pinned source patch application, caller environment, ownership and path guards: PASS");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
