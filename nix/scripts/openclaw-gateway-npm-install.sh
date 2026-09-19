@@ -25,20 +25,17 @@ if [ ! -d "$package_root" ]; then
 fi
 
 root="$out/lib/openclaw"
-mkdir -p "$root" "$out/bin"
+modules_root="$out/lib/node_modules"
+mkdir -p "$modules_root" "$out/bin"
 
 log_step() {
   printf 'openclaw npm install: %s\n' "$1"
 }
 
-log_step "copy package"
-cp -R "$package_root/." "$root/"
-log_step "copy runtime dependencies"
-mkdir -p "$root/node_modules"
-cp -R node_modules/. "$root/node_modules/"
-rm -rf "$root/node_modules/openclaw"
-ln -s .. "$root/node_modules/openclaw"
-rm -f "$root/node_modules/.bin/openclaw"
+log_step "copy installed dependency tree"
+# npm hoists dependencies beside openclaw; keep that locked tree and its realpaths.
+cp -R node_modules/. "$modules_root/"
+ln -s node_modules/openclaw "$root"
 log_step "patch npm dist"
 OPENCLAW_PACKAGE_ROOT="$root" "$NODE_BIN" "$OPENCLAW_PATCH_NPM_DIST_SCRIPT"
 
@@ -61,47 +58,9 @@ check_no_broken_symlinks() {
   rm -f "$broken_tmp"
 }
 
-copy_dist_extension_manifests() {
-  if [ ! -d "$root/dist/extensions" ]; then
-    return 0
-  fi
-
-  mkdir -p "$root/extensions"
-  find "$root/dist/extensions" -mindepth 2 -maxdepth 2 -name openclaw.plugin.json -type f -print |
-    while IFS= read -r manifest; do
-      name="$(basename "$(dirname "$manifest")")"
-      mkdir -p "$root/extensions/$name"
-      cp "$manifest" "$root/extensions/$name/openclaw.plugin.json"
-    done
-}
-
-stage_dist_runtime() {
-  if [ ! -d "$root/dist/extensions" ]; then
-    return 0
-  fi
-
-  rm -rf "$root/dist-runtime"
-  cp -R "$root/dist" "$root/dist-runtime"
-}
-
-stage_acpx() {
-  if [ -z "${OPENCLAW_BUNDLED_ACPX:-}" ]; then
-    return 0
-  fi
-  if [ ! -d "$OPENCLAW_BUNDLED_ACPX" ]; then
-    echo "OPENCLAW_BUNDLED_ACPX missing: $OPENCLAW_BUNDLED_ACPX" >&2
-    exit 1
-  fi
-
-  acpx_root="$root/dist-runtime/extensions/acpx"
-  rm -rf "$acpx_root"
-  mkdir -p "$acpx_root"
-  cp -R "$OPENCLAW_BUNDLED_ACPX/." "$acpx_root/"
-}
-
 ensure_legacy_node_module_entry() {
   package="$1"
-  if [ -e "$root/node_modules/$package" ]; then
+  if [ -e "$root/node_modules/$package" ] || [ -e "$modules_root/$package" ] || [ ! -d "$root/node_modules" ]; then
     return 0
   fi
 
@@ -111,19 +70,14 @@ ensure_legacy_node_module_entry() {
   fi
 }
 
-log_step "copy extension manifests"
-copy_dist_extension_manifests
-log_step "stage dist-runtime"
-stage_dist_runtime
-log_step "stage acpx"
-stage_acpx
+log_step "stage Nix runtime layout"
+"$OPENCLAW_RUNTIME_LAYOUT_SH" "$root"
 log_step "restore legacy dependency entries"
 ensure_legacy_node_module_entry combined-stream
 ensure_legacy_node_module_entry hasown
 
 log_step "check symlinks"
-check_no_broken_symlinks "$root/node_modules"
-check_no_broken_symlinks "$root/dist-runtime"
+check_no_broken_symlinks "$out/lib"
 
 log_step "wrap openclaw"
 export root

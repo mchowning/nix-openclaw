@@ -1,12 +1,12 @@
----
-written_by: ai
----
-
 # RFC 2: Runtime Plugin Artifact Materialization
 
 - Date: 2026-06-05
-- Status: Implementing
+- Status: Historical design record
 - Audience: OpenClaw and nix-openclaw maintainers
+
+Current artifact modes and supported inputs are documented in the [README](../../README.md)
+and [packaging invariants](../../maintainers/packaging.md). This record preserves
+the original proposal, including the artifact examples available at the time.
 
 ## Decision
 
@@ -303,6 +303,6 @@ nix-openclaw source evidence:
   and skipped-row diagnostics.
 - `nix/lib/openclaw-runtime-plugin.nix`: runtime plugin builder currently
   fetches one package tarball and validates already-present dependency roots.
-- `nix/scripts/openclaw-runtime-plugin-install.mjs`: output validator already
+- `nix/scripts/runtime-plugin/install.mjs`: output validator already
   checks manifest, runtime entries, bundled package roots, and the `openclaw`
   peer link.

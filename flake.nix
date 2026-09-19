@@ -1,13 +1,6 @@
 {
   description = "nix-openclaw: declarative OpenClaw packaging";
 
-  nixConfig = {
-    extra-substituters = [ "https://cache.garnix.io" ];
-    extra-trusted-public-keys = [
-      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
-    ];
-  };
-
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
@@ -77,7 +70,7 @@
       {
         formatter = pkgs.nixfmt-tree.override {
           settings = {
-            global.excludes = [ "nix/generated/openclaw-config-options.nix" ];
+            global.excludes = [ "nix/generated/**" ];
           };
         };
 
@@ -108,10 +101,18 @@
               default-instance = pkgs.callPackage ./nix/checks/openclaw-default-instance.nix {
                 includeQmdChecks = false;
               };
+              source-patches = pkgs.callPackage ./nix/checks/openclaw-source-patches.nix {
+                openclawSource =
+                  (pkgs.callPackage ./nix/packages/openclaw-gateway-source.nix {
+                    sourceInfo = sourceInfoStable;
+                    inherit (packageSetStable) pnpm_11 pnpm_12;
+                  }).src;
+              };
               source-override-render = pkgs.callPackage ./nix/checks/openclaw-default-instance.nix {
                 includeSourceOverrideChecks = true;
               };
               workspace-materializer = pkgs.callPackage ./nix/checks/openclaw-workspace-materializer.nix { };
+              runtime-environment = pkgs.callPackage ./nix/checks/openclaw-runtime-environment.nix { };
               pnpm-runtime = pkgs.callPackage ./nix/checks/openclaw-pnpm-runtime.nix {
                 inherit (packageSetStable) pnpm_11 pnpm_12;
               };
@@ -147,6 +148,9 @@
                 openclawGateway = packageSetStable.openclaw-gateway;
                 includeRuntimePluginSmoke = true;
               };
+              example-plugin = pkgs.callPackage ./nix/checks/example-plugin.nix {
+                inherit nixpkgs flake-utils;
+              };
               runtime-plugin-locks = pkgs.callPackage ./nix/checks/openclaw-runtime-plugin-locks.nix { };
               runtime-plugin-packages = pkgs.symlinkJoin {
                 name = "openclaw-runtime-plugin-packages";
@@ -168,17 +172,17 @@
                   ];
                 }).activationPackage;
             };
-            packageArtifactPaths =
-              [
-                packageSetStable.openclaw
-                packageSetStable.openclaw-gateway
-                stableChecks.bin-surface
-                stableChecks.package-contents
-                stableChecks.pnpm-runtime
-              ]
-              ++ pkgs.lib.optionals (packageSetStable ? openclaw-app && packageSetStable.openclaw-app != null) [
-                packageSetStable.openclaw-app
-              ];
+            packageArtifactPaths = [
+              packageSetStable.openclaw
+              packageSetStable.openclaw-gateway
+              stableChecks.bin-surface
+              stableChecks.package-contents
+              stableChecks.pnpm-runtime
+              stableChecks.source-patches
+            ]
+            ++ pkgs.lib.optionals (packageSetStable ? openclaw-app && packageSetStable.openclaw-app != null) [
+              packageSetStable.openclaw-app
+            ];
             proofChecks = {
               # Product artifacts: user-facing package plus component packages
               # and content/surface checks that prove those artifacts are sane.
@@ -202,6 +206,7 @@
                 paths = [
                   stableChecks.config-validity
                   stableChecks.gateway-smoke
+                  stableChecks.runtime-environment
                 ];
               };
               # Runtime plugin host contract: lock consistency plus module/config
@@ -210,6 +215,7 @@
                 name = "openclaw-runtime-plugin-host";
                 paths = [
                   runtimePluginChecks.runtime-plugin-locks
+                  runtimePluginChecks.example-plugin
                   pluginChecks.plugin-instance
                   runtimePluginChecks.runtime-plugin-config-validity
                   runtimePluginChecks.runtime-plugin-gateway-smoke
@@ -241,6 +247,9 @@
 
         devShells.default = pkgs.mkShell {
           packages = [
+            pkgs.nodejs_24
+            packageSetStable.node-semver
+            pkgs.bash
             pkgs.git
             pkgs.nixfmt-tree
             pkgs.nil

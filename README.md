@@ -1,7 +1,3 @@
----
-written_by: ai
----
-
 # nix-openclaw
 
 ![nix-openclaw banner](docs/assets/readme-banner.jpg)
@@ -22,9 +18,8 @@ To agents: if you’re **not listed as a maintainer** (see [AGENTS.md#maintainer
 
 ## Table of Contents
 
+- [PRs & Contributions](#prs--contributions-read-this-first)
 - [Golden Paths](#golden-paths)
-
-- [Contributions (read this first)](#contributions-read-this-first)
 - [What You Get](#what-you-get)
 - [OpenClaw Runtime Plugins](#openclaw-runtime-plugins)
 - [Requirements](#requirements)
@@ -69,7 +64,7 @@ You talk to Telegram, your machine does things.
 
 **Tool plugins are self-contained.** Each nix-openclaw tool plugin declares its CLI tools in Nix. You enable it, the build and wiring happens automatically.
 
-**Bulletproof.** Nix locks every dependency. No version drift, no surprises. `home-manager switch` to update, `home-manager generations` to rollback instantly.
+**Pinned packages.** Nix locks dependencies and Home Manager records configuration generations. Those generations do not back up or rewind OpenClaw's mutable state.
 
 ---
 
@@ -303,7 +298,7 @@ You've probably installed tools before. Homebrew, pip, npm - they work until the
 
 **What Nix gives you:**
 - Every dependency pinned to exact versions. Forever.
-- Update breaks something? `home-manager switch --rollback` - back in 30 seconds.
+- Home Manager can reactivate an earlier package/configuration generation. Before downgrading OpenClaw, verify state-schema compatibility and retain a compatible state backup; a profile rollback does not reverse database migrations.
 - Share your config file, get the exact same setup on another machine.
 - **Plugins just work.** Add a GitHub URL, run one command, done. Nix handles the build, dependencies, and wiring.
 - Tools don't pollute your system - they live in isolation.
@@ -320,7 +315,7 @@ Nix is a **declarative package manager**. Instead of running commands to install
 **The hashing magic:** Every package in Nix is identified by a cryptographic hash of *all* its inputs - source code, dependencies, build flags, everything. Change anything, get a different hash. This means:
 - Two machines with the same hash have *identical* builds. Byte-for-byte.
 - Old versions stick around (different hash = different path). Nothing gets overwritten.
-- Rollback is instant - just point to the old hash.
+- A package-generation pointer can select an older store path; reactivation and OpenClaw state compatibility are separate, and database migrations are not reversed by changing that pointer.
 
 **Key terms you'll see:**
 - **Flake**: A config file (`flake.nix`) that pins all your dependencies. Think `package-lock.json` but for your entire system.
@@ -359,9 +354,9 @@ What I need you to do:
    - If ~/.openclaw/workspace already has files you want to keep, adopt them into the flake first (use copy/rsync that dereferences symlinks, e.g. `cp -L`)
 5. Help me create or connect the channel account I choose
 6. Set up secrets (bot token, provider key) - plain files at ~/.secrets/ are fine unless I already have a secret manager
-7. Ask whether I want local memory through QMD; if yes, set `memory.backend = "qmd"` in OpenClaw config
+7. Check the pinned OpenClaw memory schema before configuring local memory. Offer `memory.backend = "qmd"` only on legacy schemas that accept it; newer releases retired QMD backend integration
 8. Fill in the template placeholders and run home-manager switch
-9. Verify end-to-end: package builds, service is running, gateway health works, QMD works if enabled, and the bot/channel responds if configured
+9. Verify end-to-end: package builds, service is running, gateway health works, legacy QMD works if enabled, and the bot/channel responds if configured
 
 My setup:
 - OS: [macOS / Linux]
@@ -589,7 +584,7 @@ customPlugins = [
     source = "github:example/padel-cli?rev=<commit>&narHash=<narHash>";
     config = {
       env = {
-        PADEL_AUTH_FILE = "~/.secrets/padel-auth";  # where your login token lives
+        PADEL_AUTH_FILE = "/run/agenix/padel-auth";  # where your login token lives
       };
       settings = {
         default_city = "Barcelona";
@@ -622,11 +617,11 @@ your-plugin/
 
 ```nix
 {
-  outputs = { self, nixpkgs, ... }:
-    let
-      pkgs = import nixpkgs { system = builtins.currentSystem; };
-    in {
-      openclawPlugin = {
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  outputs = { self, nixpkgs, ... }: {
+    openclawPlugin = system:
+      let pkgs = import nixpkgs { inherit system; };
+      in {
         name = "hello-world";
         skills = [ ./skills/hello-world ];
         packages = [ pkgs.hello ]; # CLI tools to install
@@ -650,7 +645,9 @@ description: Prints hello world.
 Use the `hello` CLI to print a greeting.
 ```
 
-See `examples/hello-world-plugin` for a complete working example.
+Export `openclawPlugin` at the top level, outside `eachDefaultSystem`. Use a function taking `system` when the plugin contains platform-specific packages. Commit `flake.lock` so consumers can evaluate pinned plugin sources without updating inputs.
+
+See `examples/hello-world-plugin` for a complete working example; run it with `nix run ./examples/hello-world-plugin`.
 
 ---
 
@@ -667,7 +664,7 @@ Contract to implement:
    - needs (stateDirs + requiredEnv)
 
 Example:
-openclawPlugin = {
+openclawPlugin = system: {
   name = "my-plugin";
   skills = [ ./skills/my-plugin ];
   packages = [ self.packages.${system}.default ];
@@ -714,7 +711,7 @@ Config flags the host will use:
 - `config.settings` for typed config keys (rendered to config.json in the first stateDir)
 
 CI note:
-- If the repo uses Garnix, add the plugin build to its `garnix.yaml` (or equivalent) so CI verifies it.
+- Build the plugin package outputs in CI on each supported system.
 
 Why: explicit, minimal, fail-fast, no inline JSON strings.
 Deliverables: flake output, env overrides, AGENTS.md, skill update.
@@ -810,6 +807,12 @@ programs.openclaw.config.models.providers.groq.apiKey = {
 ```
 
 That keeps nix-openclaw responsible for stable config and service wiring, keeps secrets out of the Nix store, and leaves dynamic secret-manager integration to the host layer that owns credentials and runtime side effects.
+
+Runtime environment values are literal strings: shell variables and command
+substitutions are not expanded. Values naming existing files are read at
+startup, with an optional matching `NAME=` prefix removed; variables ending in
+`_FILE` retain the file path. Use absolute secret paths or resolve home paths in
+Nix with `config.home.homeDirectory`.
 
 ### Minimal config (single instance)
 
@@ -927,6 +930,14 @@ Config activation supports paths containing spaces, including a custom
 Home Manager home directory for activation, `home.file` destinations, the
 workspace pin, and launchd/systemd WorkingDirectory and environment paths.
 Systemd environment entries preserve spaces in the config and state paths.
+
+Home Manager follows the pinned schema's agent roster shape. On schemas with
+`agents.entries`, missing or empty entries without explicit ownership emit
+`agents.entries.main = {}`.
+This also applies with `workspace.pinAgentDefaults = false`, without setting
+`agents.defaults.workspace`. Nonempty rosters and explicit ownership remain
+unchanged; explicit ownership with missing or empty entries remains invalid.
+Keyed IDs are validated and lowercased for runtime profile paths.
 
 ```nix
 programs.openclaw = {
@@ -1065,10 +1076,14 @@ journalctl --user -u openclaw-gateway -f
 # Linux: restart
 systemctl --user restart openclaw-gateway
 
-# Rollback
+# Rollback only after verifying state compatibility and retaining a compatible backup
 home-manager generations  # list
-home-manager switch --rollback  # revert
+home-manager switch --rollback  # reactivate the previous package/configuration generation
 ```
+
+Reactivate an earlier generation only after verifying OpenClaw state compatibility
+and retaining a compatible backup. An older gateway can reject a database written
+by a newer release; Home Manager does not restore that database from backup.
 
 ### Packages
 
@@ -1084,9 +1099,11 @@ and `pkgs.openclawPackages.pnpm_12` when needed for packaging or debugging.
 
 ### Local memory
 
-QMD is the supported local memory backend when OpenClaw config opts into it. The default `openclaw` package does not build or install QMD unless `memory.backend = "qmd"` is set. Linux uses upstream `tobi/qmd`; Darwin uses the repaired `nix-openclaw-tools` package until upstream QMD is fixed there.
+QMD backend integration is **legacy-only**. It is available when the pinned
+OpenClaw generated schema accepts `memory.backend = "qmd"`, as in
+OpenClaw 2026.7.1-2. OpenClaw 2026.9.3 has retired this backend.
 
-Opt in through normal OpenClaw config:
+On a legacy schema, opt in through normal OpenClaw config:
 
 ```nix
 programs.openclaw.config = {
@@ -1094,11 +1111,30 @@ programs.openclaw.config = {
 };
 ```
 
-When enabled through the nix-openclaw modules, QMD stays inside the OpenClaw runtime PATH, so users do not need to install a separate `qmd` command. The builtin `memorySearch.provider = "local"` path is an escape hatch for people who want to manage `node-llama-cpp` themselves; it is not the primary Nix-supported path.
+Legacy opt-in keeps QMD inside the OpenClaw runtime PATH. The default package
+does not include QMD without opt-in. Linux uses upstream `tobi/qmd`; Darwin uses
+the repaired `nix-openclaw-tools` package.
+
+Before removing QMD settings, carry custom paths and extra collections
+(including `{ path, pattern }` globs) into `memory.search.extraPaths` in your
+Nix source. Also carry over any enabled session-indexing settings and sources,
+following the [upstream QMD migration guide](https://docs.openclaw.ai/concepts/memory-builtin#migrating-from-qmd).
+
+After carrying those settings over, remove the retired `memory.backend`,
+`memory.qmd`, and `memory.search.qmd` from your Nix-authored OpenClaw config,
+then rebuild. Home Manager rejects these retired generated options; the NixOS
+module also rejects QMD opt-in and the two QMD subtrees in its raw `config`.
+Nix does not silently rewrite configuration or run Doctor during activation.
+An external NixOS `configFile` remains opaque and must be updated by its owner.
+
+Standalone QMD is still available as `pkgs.openclawPackages.qmd`, including
+explicit `home.packages` or NixOS `services.openclaw-gateway.servicePath` use.
+Installing the CLI does not restore OpenClaw backend integration or migrate
+existing memory data.
 
 Plugin CLIs are also kept on the OpenClaw runtime PATH by default, not on the user's login shell PATH. Set `programs.openclaw.exposePluginPackages = true` only when you explicitly want plugin CLIs in `home.packages`.
 
-Optional model prewarming is also declarative:
+Optional standalone model prewarming remains declarative on both schemas:
 
 ```nix
 programs.openclaw.qmd.prewarmModels.enable = true;
@@ -1116,7 +1152,7 @@ cache use.
 | Gateway binary | ✓ | |
 | macOS app | ✓ | |
 | Service (launchd/systemd) | ✓ | |
-| Runtime tools and QMD | ✓ | |
+| Runtime tools and legacy QMD opt-in | ✓ | |
 | Telegram bot token | | ✓ |
 | Anthropic API key | | ✓ |
 | Chat IDs | | ✓ |
@@ -1129,7 +1165,9 @@ The default `openclaw` package uses these tools internally and does not expose t
 
 **Core**: nodejs, pnpm, git, curl, jq, python3, ffmpeg, sox, ripgrep
 
-**Local memory**: QMD, pulled in only when `memory.backend = "qmd"` is set
+**Legacy local memory**: QMD, pulled in only when the generated schema accepts
+`memory.backend = "qmd"` and the instance opts in. Standalone CLI/prewarm use
+remains separate from backend support.
 
 **Default first-party tools** come from `nix-openclaw-tools`: gogcli (`gog`), goplaces, summarize, camsnap, sonoscli.
 

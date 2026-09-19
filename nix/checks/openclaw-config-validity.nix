@@ -2,7 +2,7 @@
   lib,
   pkgs,
   stdenv,
-  nodejs_22,
+  nodejs_24,
   openclawGateway,
   includeRuntimePluginSmoke ? false,
 }:
@@ -113,7 +113,14 @@ let
   };
 
   configPathKey = ".openclaw/openclaw.json";
-  configFile = moduleEval.config.home.file."${configPathKey}".source;
+  openclawLib = import ../modules/home-manager/openclaw/lib.nix {
+    inherit lib pkgs;
+    config = moduleEval.config;
+  };
+  renderedConfig = builtins.fromJSON moduleEval.config.home.file."${configPathKey}".text;
+  configFile =
+    assert !openclawLib.usesAgentEntries || renderedConfig.agents.entries == { main = { }; };
+    moduleEval.config.home.file."${configPathKey}".source;
   expectedWorkspace = "/tmp/openclaw-explicit-workspace";
 
 in
@@ -130,7 +137,7 @@ stdenv.mkDerivation {
   dontBuild = true;
 
   nativeBuildInputs = [
-    nodejs_22
+    nodejs_24
   ]
   ++ lib.optional includeRuntimePluginSmoke pkgs.openclawRuntimePlugins.${runtimePluginSmokeId};
 
@@ -144,6 +151,6 @@ stdenv.mkDerivation {
   };
 
   doCheck = true;
-  checkPhase = "${nodejs_22}/bin/node ${../scripts/check-config-validity.mjs}";
+  checkPhase = "${nodejs_24}/bin/node ${../scripts/check-config-validity.mjs}";
   installPhase = "${../scripts/empty-install.sh}";
 }

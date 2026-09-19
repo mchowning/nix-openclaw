@@ -1,31 +1,24 @@
----
-written_by: ai
----
-
 # Performance Audit
 
 Commit-tied metrics for packaging and CI changes. Keep this file short: current
 snapshot, decision-relevant history, and exact commands. Raw logs belong in
 GitHub Actions, local `/tmp` captures, or ignored `.agent/` notes.
 
-## Current Snapshot
+## Historical npm packaging comparison
 
-- Compared refs:
-  - pre-#101 baseline: `d69b1fc1e736bbe78b46bd886fcc1791b5b9d942`
-  - current main: `4f0a37d3068f6b98e7da1fa26014b2ba72342d00`
-  - PR #100 remote head before this slice:
-    `4db66bdb2ced44fcf4e476cb30afdde7e09dc5c1`
-  - local merge/proof head before this audit edit:
-    `9e5fb2cb12f4b5d93ab26a192311925195c70e91`
-- The local branch now contains current `main`; remote PR #100 remains dirty
-  until this branch is pushed and GitHub recomputes mergeability. The #101
-  overlap is intentionally replaced: Garnix no longer references the deleted
-  `ci` aggregate and remains a small cache-publication target set.
-- Product change: stable `openclaw-gateway` uses the upstream npm package and
-  `npm-shrinkwrap.json` through `buildNpmPackage`; source/pnpm remains available
-  for explicit `gatewayPath` source overrides.
+[PR #100](https://github.com/openclaw/nix-openclaw/pull/100) compared the npm
+package path with the source/pnpm build. These measurements describe that
+change, not current release sizes:
 
-| Metric | main | PR #100 | Change | Command |
+- Source baseline: `d69b1fc1e736bbe78b46bd886fcc1791b5b9d942`.
+- Comparison main: `4f0a37d3068f6b98e7da1fa26014b2ba72342d00`.
+- Candidate: `4db66bdb2ced44fcf4e476cb30afdde7e09dc5c1`.
+- Post-merge proof: `9e5fb2cb12f4b5d93ab26a192311925195c70e91`.
+
+Stable gateway packages use upstream npm/shrinkwrap artifacts. Explicit
+`gatewayPath` overrides retain the source/pnpm builder.
+
+| Metric | Source baseline | npm candidate | Change | Command |
 | --- | ---: | ---: | ---: | --- |
 | Gateway closure | 2,273,877,888 B | 904,981,328 B | 60.2% smaller | `nix path-info -S "$gateway"` |
 | `openclaw` closure | 3,215,431,032 B | 1,846,534,464 B | 42.6% smaller | `nix path-info -S "$openclaw"` |
@@ -35,9 +28,18 @@ GitHub Actions, local `/tmp` captures, or ignored `.agent/` notes.
 | Gateway forced rebuild | 399.37s then Nix determinism failure | 56.27s success | deterministic npm path | `/usr/bin/time -p nix build --rebuild --no-link <ref>#packages.aarch64-darwin.openclaw-gateway` |
 | Garnix include targets | 10 | 5 | 50.0% fewer | `ruby -e 'require "yaml"; ...'` |
 
+## Cache availability
+
+The historical Garnix measurements below describe PR #100. Its cache endpoint
+now returns NXDOMAIN, so the flake no longer advertises that substituter and
+`garnix.yaml` has been removed. Builds use the operator's configured Nix caches
+and the default NixOS cache.
+
 ## CI Proof Shape
 
-GitHub Actions now has three jobs:
+The regular [CI workflow](../.github/workflows/ci.yml) has three validation jobs.
+A branch-only dispatch can additionally qualify the historical installed baseline;
+publication runs only after the main-branch validation jobs pass.
 
 | Job | Proves | Notes |
 | --- | --- | --- |
@@ -62,11 +64,11 @@ Deleted surface:
 - `packages.<system>.openclaw-gateway-dogfood`
 - `checks.<system>.package-contents-dogfood`
 
-## Current Local Proof
+## Historical local proof for PR #100
 
 | Proof | Result | Notes |
 | --- | --- | --- |
-| Workflow/Garnix YAML parse | pass | `.github/workflows/ci.yml`, pin workflow, `garnix.yaml` |
+| Workflow/Garnix YAML parse | pass | `.github/workflows/ci.yml`, pin workflow, historical `garnix.yaml` |
 | `git diff --check` | pass | No whitespace errors. |
 | Darwin supported surface, cold local pass | pass, 288s | 42 planned/built derivations; runtime plugin catalog dominated cost. |
 | Darwin supported surface, post-merge warm pass | pass, 28s | 0 planned/built derivations; validates the mergeable head uses the cached supported surface. |
@@ -83,7 +85,7 @@ Deleted surface:
 | `ci` aggregate | Removed | The name hid unrelated proof obligations. Named attrs expose what is proven. |
 | supported-surface CI | Accepted | One platform job per OS builds all supported attrs in one Nix invocation, avoiding matrix/setup duplication. |
 | source override | Render proof retained | `gatewayPath` is dev-only; CI proves module/source-builder wiring without reintroducing a full pnpm source build. |
-| Garnix | Cache publication only | Garnix is sunset risk. GitHub Actions owns proof; Garnix keeps a small package/cache target set. |
+| Garnix | Retired | The endpoint no longer resolves. GitHub Actions owns proof; cache publication configuration was removed. |
 | larger runners / machine images | Excluded | Provider tuning may help cold start, but does not simplify the Nix graph or prove downstream install behavior. |
 | Magic Nix Cache | Rejected | Remote experiment made Linux slower and blocked macOS proof startup. |
 
@@ -91,7 +93,7 @@ Deleted surface:
 
 ```bash
 ruby -e 'require "yaml"; ARGV.each { |p| YAML.load_file(p) }; puts "yaml ok"' \
-  .github/workflows/ci.yml .github/workflows/pin-stable-openclaw-version.yml garnix.yaml
+  .github/workflows/ci.yml .github/workflows/pin-stable-openclaw-version.yml
 git diff --check
 
 nix eval --accept-flake-config --json .#checks.aarch64-darwin --apply 'c: builtins.attrNames c'

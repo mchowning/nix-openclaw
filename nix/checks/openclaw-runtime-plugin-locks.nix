@@ -1,13 +1,16 @@
 {
   lib,
   stdenvNoCC,
-  nodejs_22,
+  nodejs_24,
+  callPackage,
 }:
 
 let
   scriptsDir = ../scripts;
   generatedLocks = import ../generated/openclaw-runtime-plugins/default.nix;
-  generatedLocksJson = builtins.toFile "openclaw-runtime-plugin-locks.json" (builtins.toJSON generatedLocks);
+  generatedLocksJson = builtins.toFile "openclaw-runtime-plugin-locks.json" (
+    builtins.toJSON generatedLocks
+  );
 in
 stdenvNoCC.mkDerivation {
   pname = "openclaw-runtime-plugin-locks";
@@ -17,24 +20,26 @@ stdenvNoCC.mkDerivation {
   dontConfigure = true;
   dontBuild = true;
 
-  nativeBuildInputs = [ nodejs_22 ];
+  nativeBuildInputs = [
+    nodejs_24
+    (callPackage ../packages/node-semver.nix { })
+  ];
 
   env = {
     OPENCLAW_RUNTIME_PLUGIN_LOCK_DIR = "${../generated/openclaw-runtime-plugins}";
     OPENCLAW_RUNTIME_PLUGIN_LOCKS_JSON = "${generatedLocksJson}";
     OPENCLAW_SOURCE_INFO_PATH = "${../sources/openclaw-source.nix}";
     # Pure CI evaluation cannot opt into local release-evidence overrides.
-    OPENCLAW_RUNTIME_PLUGIN_ALLOW_EVIDENCE_OVERRIDE =
-      builtins.getEnv "OPENCLAW_RUNTIME_PLUGIN_ALLOW_EVIDENCE_OVERRIDE";
+    OPENCLAW_RUNTIME_PLUGIN_ALLOW_EVIDENCE_OVERRIDE = builtins.getEnv "OPENCLAW_RUNTIME_PLUGIN_ALLOW_EVIDENCE_OVERRIDE";
   };
 
   doCheck = true;
   checkPhase = ''
-    ${nodejs_22}/bin/node --test ${scriptsDir}/openclaw-runtime-plugin-version.test.mjs
-    ${nodejs_22}/bin/node --test ${scriptsDir}/openclaw-runtime-plugin-package-locks.test.mjs \
+    ${nodejs_24}/bin/node --test ${scriptsDir}/openclaw-runtime-plugin-version.test.mjs ${scriptsDir}/plugin-compatibility.test.mjs
+    ${nodejs_24}/bin/node --test ${scriptsDir}/openclaw-runtime-plugin-package-locks.test.mjs \
       ${scriptsDir}/openclaw-runtime-plugin-prepare-npm.test.mjs \
       ${scriptsDir}/check-openclaw-runtime-plugin-locks.test.mjs
-    ${nodejs_22}/bin/node ${scriptsDir}/check-openclaw-runtime-plugin-locks.mjs
+    ${nodejs_24}/bin/node ${scriptsDir}/check-openclaw-runtime-plugin-locks.mjs
   '';
   installPhase = "${../scripts/empty-install.sh}";
 

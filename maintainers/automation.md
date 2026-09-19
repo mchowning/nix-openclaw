@@ -25,6 +25,11 @@ If both tracks are current and stable pin automation/CI are healthy, stop with a
 
 ## Repair Loop
 
+To prove stable-pin repairs before landing, dispatch `Pin Stable OpenClaw
+Version` on a maintainer branch. It runs the Linux/macOS package gates and
+verifies a local promotion commit, including added and removed generated files.
+Only `main` pushes the resulting pin update and dispatches publication CI.
+
 If the desired state is not true, keep working until it is true or until the exact blocker is proven.
 
 Diagnose across:
@@ -45,3 +50,18 @@ Do not ask for a repair strategy when the desired state is clear.
 If the fix belongs in `nix-openclaw`, edit the repo, self-review the diff until there are no actionable findings, run the relevant targeted checks plus the full gate, commit directly to `main`, push directly to `main`, and verify GitHub Actions on the pushed commit.
 
 If upstream has not published public macOS app assets, call that out directly, keep the app pin on the newest public zip, keep packaging the latest stable gateway, and repair `nix-openclaw` only if it fails to do that.
+
+## Runtime plugin lock checks
+
+`nix develop --command node nix/scripts/update-openclaw-runtime-plugin-locks.mjs --check`
+compares regenerated artifacts without creating or changing the generated directory.
+Use no argument to write updates. Unknown or repeated flags fail before Nix
+runs; `--help` prints usage without fetching artifacts.
+
+Plugin compatibility checks use the pinned `node-semver` tool from `nix develop`
+(also supplied by `scripts/update-pins.sh` and CI). Peer ranges use npm syntax,
+including wildcards, caret, tilde and OR ranges. Plugin API ranges follow upstream
+OpenClaw: comparator intersections only, bare major.minor as a minimum, and
+release-suffix normalization. Minimum host versions retain numeric correction
+ordering after stable releases; legacy bare minimums remain accepted. Missing
+tooling aborts generation before processing artifacts.

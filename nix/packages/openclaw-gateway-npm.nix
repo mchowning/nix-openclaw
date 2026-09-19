@@ -19,10 +19,14 @@ in
 
 assert lib.assertMsg (lockedVersion == sourceInfo.releaseVersion)
   "OpenClaw npm lock version ${toString lockedVersion} does not match OpenClaw ${sourceInfo.releaseVersion}";
-assert lib.assertMsg ((bundledAcpx.openclawRuntimePlugin.id or null) == "acpx")
-  "bundledAcpx must be the generated ACPX runtime plugin package";
-assert lib.assertMsg ((bundledAcpx.openclawRuntimePlugin.version or null) == sourceInfo.runtimePluginVersion)
-  "ACPX runtime plugin version ${toString (bundledAcpx.openclawRuntimePlugin.version or null)} does not match OpenClaw runtime plugins ${sourceInfo.runtimePluginVersion}";
+assert lib.assertMsg (
+  (bundledAcpx.openclawRuntimePlugin.id or null) == "acpx"
+) "bundledAcpx must be the generated ACPX runtime plugin package";
+assert lib.assertMsg
+  ((bundledAcpx.openclawRuntimePlugin.version or null) == sourceInfo.runtimePluginVersion)
+  "ACPX runtime plugin version ${
+    toString (bundledAcpx.openclawRuntimePlugin.version or null)
+  } does not match OpenClaw runtime plugins ${sourceInfo.runtimePluginVersion}";
 
 buildNpmPackageForOpenClaw {
   pname = "openclaw-gateway";
@@ -46,6 +50,7 @@ buildNpmPackageForOpenClaw {
     # stdenv unpacks the directory source under its hash-stripped store name;
     # postUnpack runs in the build root before stdenv enters it.
     OPENCLAW_NPM_WRAPPER_DIR = baseNameOf wrapperSrc;
+    OPENCLAW_RUNTIME_LAYOUT_SH = "${../scripts/openclaw-stage-runtime.sh}";
     OPENCLAW_BUNDLED_ACPX = "${bundledAcpx}";
     OPENCLAW_NPM_PACKAGE_ROOT = "node_modules/openclaw";
     OPENCLAW_PATCH_NPM_DIST_SCRIPT = "${../scripts/patch-openclaw-npm-dist.mjs}";

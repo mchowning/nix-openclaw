@@ -26,15 +26,15 @@ This repo ships a working Nix package for OpenClaw users, not just a pin mirror.
 - Generated config options come from the upstream core schema.
 - Plugin-owned extension surfaces, such as `channels.<plugin-id>`, must remain accepted by the Home Manager module even when core does not type every plugin key.
 - Runtime tool injection belongs here. If a plugin or battery is enabled, the active OpenClaw harness must see its CLI tools and required environment without asking downstream to expose those tools globally on the user PATH.
-- OpenClaw plugin roots belong here too. The Home Manager module consumes `openclawPlugin.plugins` declarations from plugin flakes and writes `plugins.load.paths` plus default `plugins.entries.<id>.enabled` values into the generated config.
-- Raw npm/ClawHub plugin names are not batteries-included deployment config. Curated plugins packaged here must be exposed through packages/checks so CI/Garnix caches them. Arbitrary user specs need a deterministic lock/hash-backed Nix builder so Nix reuses the user's store/cache and only rebuilds when the spec, lock, or hash changes.
+- OpenClaw runtime plugin roots belong here too. The Home Manager module consumes `runtimePlugins` catalog ids or locked `runtimePluginSources` and writes `plugins.load.paths` plus enabled entries. Tool-plugin flakes expose packages and skills; `openclawPlugin.plugins` is rejected.
+- Raw npm/ClawHub plugin names are not batteries-included deployment config. Curated plugins packaged here must be exposed through packages/checks so CI validates them and consumers can build or cache them. Arbitrary user specs need a deterministic lock/hash-backed Nix builder so Nix reuses the user's store/cache and only rebuilds when the spec, lock, or hash changes.
 
 ## Build Contract
 
 - The gateway package must include Control UI assets.
 - No inline scripts or inline file contents in Nix code. Use repo scripts and explicit file paths.
 - Keep runtime tools internal to the `openclaw` wrapper unless they are intentionally part of the public package surface.
-- QMD is the Nix-supported local memory backend. Keep `qmd` internal to the OpenClaw runtime PATH, and pull it into the closure only when users opt in with upstream config.
+- QMD backend integration is legacy-only: the generated `memory.backend` option must accept `"qmd"`. Keep legacy opt-in internal to the OpenClaw runtime PATH. Newer schemas reject retired QMD configuration without translating it; standalone CLI packaging and explicit model prewarming remain supported.
 - The gateway npm wrapper lock (`nix/npm/openclaw/package-lock.json`) is resolved from scratch on every pin refresh, never updated in place: npm keeps stale nested transitive packages as targets of new direct dependency edges and drops the hoisted package, which `npm ci` then tries to fetch from the registry. The lock must be consumable without the registry; `nix/scripts/check-openclaw-npm-wrapper-lock.sh` proves that by re-running npm's resolver offline against an empty cache in a scratch copy, which must succeed and leave the lock byte-identical (subtrees upstream pins through `npm-shrinkwrap.json` are accepted), at pin time and before `npm ci` in the gateway build.
 - ACPX compatibility files are staged at build time from locked package inputs,
   not installed or repaired by npm at runtime.
@@ -46,6 +46,39 @@ This repo ships a working Nix package for OpenClaw users, not just a pin mirror.
 ### mcporter and QMD
 
 - `mcporter` is an OpenClaw-owned optional MCP/CLI bridge, not a QMD requirement.
-- OpenClaw defaults to direct `qmd` CLI execution. Keep that as the Nix-supported baseline until measured startup or per-query overhead proves otherwise.
+- Legacy OpenClaw QMD integration defaults to direct `qmd` CLI execution. Retired schemas do not support a QMD backend, even when the standalone CLI is installed.
 - Package `mcporter` in `nix-openclaw-tools` as an optional tool when needed, but do not add it to the default `openclaw` runtime PATH just because QMD is bundled.
-- If `memory.qmd.mcporter.enabled = true`, nix-openclaw should make `mcporter` visible to that instance and require the matching mcporter server config for `qmd mcp`.
+- On a legacy schema accepting `memory.qmd.mcporter.enabled = true`, nix-openclaw should make `mcporter` visible to that instance and require the matching mcporter server config for `qmd mcp`.
+
+## Source overrides
+
+Source builds fetch the locked workspace before building offline. An empty
+`NIX_NPM_REGISTRY` defaults to `https://registry.npmjs.org/`; a non-empty operator
+override is preserved. pnpm 11+ stores toolchain and workspace locks in separate
+YAML documents. Completeness checks read the final workspace document, including
+any actual workspace dependency named `pnpm`; Nix supplies the package manager.
+The build restores fetcher-v4 SQLite indexes and reuses the fixed-output fetch's
+supply-chain verification. Installs stay frozen and all package-manager commands
+use the verified offline store.
+
+The build invokes upstream's `build:package` script. Older source checkouts with
+separate public `build` and `ui:build` scripts use those entry points. Upstream
+owns compiler grouping, runtime staging, SDK declarations, and package assets.
+Native rebuilds select the gateway's workspace dependency closure, including the
+root, so unrelated extension installers cannot download dependencies during the
+build.
+
+Production deployment uses pnpm's package-file and workspace-dependency rules.
+It preserves declared launchers and runtime helpers while excluding development
+files, and package symlinks must remain valid after the build store is removed.
+Both package routes share the Nix runtime layout: extension manifests, a canonical
+`dist-runtime` alias, and the pinned ACPX bundle. The source wrapper invokes the
+manifest's `openclaw` executable in Nix mode.
+
+Build timestamps come from `SOURCE_DATE_EPOCH`. For the pinned source archive,
+provenance records its full Git SHA; arbitrary source overrides are not stamped
+with the default pin's identity.
+
+Use upstream build resource controls or `NODE_OPTIONS`. The Nix TSDOWN override
+forwards to `OPENCLAW_TSDOWN_MAX_OLD_SPACE_MB`; the separate Nix TSC override is
+retired because the current upstream build has no independent tsc stage.

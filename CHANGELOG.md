@@ -1,7 +1,3 @@
----
-written_by: ai
----
-
 # Changelog
 
 This changelog starts with the current pre-1.0 nix-openclaw Home Manager module
@@ -10,23 +6,54 @@ Older repository history is available in git.
 
 ## Unreleased
 
-**Highlights:** Nix-managed skills remain discoverable with OpenClaw’s hardlink checks, and documented home-relative paths work consistently across Home Manager activation and gateway services. Changes below cover the package state since `v2026.7.1`.
+- Refresh Nixpkgs, Home Manager, bundled OpenClaw tools and example-plugin inputs, and update the private pnpm 11 runtime to 11.27.0.
+- Restore source gateway builds through upstream build and production-deployment entry points, with verified offline pnpm stores and complete workspace dependencies.
+- Make source-build provenance reproducible with `SOURCE_DATE_EPOCH` and record the known pinned Git commit.
+- Fix source-build commands failing when Nix timing output is disabled.
+- Compatibility: retire `OPENCLAW_NIX_TSC_MAX_OLD_SPACE_MB` because upstream no longer builds SDK declarations in a separate tsc stage; use upstream build controls or `NODE_OPTIONS`. `OPENCLAW_NIX_TSDOWN_MAX_OLD_SPACE_MB` forwards to upstream's corresponding setting.
 
+- Escape Nix string interpolation in generated schema and plugin metadata, including paths containing spaces; reject unknown updater arguments and keep `--check` from creating generated directories.
+- Compatibility: pass runtime environment values and plugin secret-file paths literally, preserving quotes and `$` without shell expansion; resolve home paths in Nix. File loading, matching `NAME=` prefixes, `_FILE` paths, and instance overrides remain supported.
+
+- Provide Node 24 and Bash in the development shell, and run contract tests with the same pinned Node/Bash/Git toolchain on Linux and macOS.
+- Accept valid npm peer ranges in runtime plugin catalog checks and align plugin API/minimum-host comparisons with OpenClaw, including numeric correction releases; report packaging constraints after compatibility succeeds.
+
+- Update the source-build Node addon headers to `node-addon-api` 8.9.2; retain the existing Node 24 runtime floor.
+- Compatibility: stop advertising the retired Garnix cache (`cache.garnix.io` returns NXDOMAIN); builds use the operator's configured substituters and the default NixOS cache.
+- Compatibility: fix the hello-world plugin example by exporting the host-system function at the top level, locking its inputs, and installing the documented `hello-world` executable (previously emitted as `hello-world-openclaw`).
+
+## 2026.9.4 - 2026-09-11
+
+**Highlights:** Package OpenClaw 2026.9.4 on Linux and macOS, restore automatic stable updates after runtime plugin removals, preserve Nix-managed skill discovery, and make Home Manager paths and activation consistent. Changes below cover the package state since `v2026.7.1`.
+
+- Package upstream OpenClaw `2026.9.4` with its matching macOS app artifact, generated configuration, and reproducible runtime plugin locks.
+- Restore stable pin promotion when an upstream release removes runtime plugins: hash and commit the complete staged update, including deletions, and allow branch validation to prove promotion without publishing; thanks @bastislack (#142).
 - Materialize configured user and plugin skills as per-instance runtime copies, preserving all-agent discovery, extra load paths, and cleanup boundaries; thanks @vsumner (#118).
 - Resolve leading `~/` in instance state, workspace, and config paths consistently for managed files, runtime profiles, and launchd/systemd services, including paths containing spaces and quotes; thanks @SebTardif (#130).
-- Support packaging OpenClaw 2026.8.1+ lockless runtime plugins once upstream ships npm package-lock release evidence, with dependencies bound to the pinned release SHA (2026-09-06).
+- Constrain workspace cleanup and replacement to configured roots, preserve stale paths from removed or moved instances with a warning, avoid changing symlink targets or hardlinked file permissions, and create home-relative workspace paths containing spaces correctly; thanks @SebTardif (#119, #120).
+- Make QMD backend integration legacy-only according to the generated OpenClaw schema. Before upgrading to a retired schema such as 2026.9.3, carry custom indexed paths and session-indexing settings into Nix source before removing `memory.backend`, `memory.qmd`, and `memory.search.qmd`; no automatic migration is performed. Preserve legacy opt-in, standalone QMD CLI packaging, and explicit model prewarming, with checks for both schema contracts (2026-09-09).
+- Fix Home Manager config symlink activation and systemd environment quoting for paths containing spaces, while preserving home-relative `~/` symlink destinations; thanks @SebTardif (#122).
+- Clarify that Home Manager generations restore package/configuration selections, not OpenClaw's mutable state or database schema; remove unconditional instant-rollback claims (2026-09-09).
+- Restart the configured launchd labels and systemd user units with `openclaw-reload` instead of the old hardcoded labels.
 - Regenerate the gateway npm wrapper lock from scratch on every stable pin refresh and validate it offline before `npm ci`; updating the previous release's lock in place left OpenClaw 2026.9.x without its hoisted `p-limit@7` dependency and failed the Nix gateway build with ENOTCACHED (2026-09-07).
 - Use the locked Node.js 24 runtime for OpenClaw builds, launchers, plugin materialization, private pnpm integrations, and bundled tools; Node.js 22 cannot install or run OpenClaw 2026.9.3 (2026-09-08).
 - Recognize the root `.js` and `.mjs` packaging contracts in OpenClaw 2026.7.1-2 and 2026.9.3, reusing upstream's hardlink predicate for Nix store ownership and retaining existing candidate-install guard limitations; source overrides and native validation remain separate (2026-09-08).
-- Fix Home Manager config symlink activation and systemd environment quoting for paths containing spaces, while preserving home-relative `~/` symlink destinations; thanks @SebTardif (#122).
-- Constrain workspace cleanup and replacement to configured roots, preserve stale paths from removed or moved instances with a warning, avoid changing symlink targets or hardlinked file permissions, and create home-relative workspace paths containing spaces correctly; thanks @SebTardif (#119, #120).
-- Keep OpenClaw's private pnpm tools out of the consumer Nixpkgs overlay, support pnpm 12 releases, update the private runtimes to pnpm 11.26.0 and 12.3.4, and fix the pnpm 12 Linux executable's loader and runtime libraries; thanks @jerome-benoit (#116, #117, #121).
-- Restart the configured launchd labels and systemd user units with `openclaw-reload` instead of the old hardcoded labels.
-- Package upstream OpenClaw `2026.7.1-2`, retain runtime plugin version `2026.7.1` for correction releases, and repair the macOS `2026.7.1` app artifact hash; thanks @vincentkoc.
+- Require the runtime HEARTBEAT template only when advertised by the installed package manifest, matching its retirement in OpenClaw 2026.9.3 while retaining legacy checks and enforcing the six shared workspace documentation templates (2026-09-09).
+- Preserve the complete locked npm dependency tree in the gateway output so hoisted packages remain resolvable after installation; retain nested versions, legacy dependency entries, and the existing `lib/openclaw` path (2026-09-09).
+- Keep bundled runtime plugins on one canonical `dist` module graph and materialize the built ACPX package inside that tree, fixing relative chunk imports and physical-containment failures with OpenClaw 2026.9.3. Legacy releases selecting `dist/extensions` now discover the same packaged ACPX runtime (2026-09-09).
+- Follow the pinned agent roster schema in Home Manager and its multi-agent checks. Keyed rosters use validated, lowercase profile IDs without an extra main agent; missing or empty non-explicit rosters emit `agents.entries.main = {}` even with workspace pinning disabled, without adding a workspace pin. Nonempty rosters, explicit ownership, and old-schema output stay unchanged (2026-09-08).
+- Match OpenClaw 2026.9.3 canonical keyed agent IDs for runtime profiles and collision checks, stripping trailing hyphens only from underscore-prefixed IDs while preserving authored rosters (2026-09-09).
+- Restore macOS app-default activation for the implicit Home Manager instance by supplying its existing `nixMode = true` default (2026-09-09).
+- Support packaging OpenClaw 2026.8.1+ lockless runtime plugins once upstream ships npm package-lock release evidence, with dependencies bound to the pinned release SHA (2026-09-06).
+- Keep OpenClaw's private pnpm tools out of the consumer Nixpkgs overlay, support pnpm 12 releases, update the private runtimes to pnpm 11.26.0 and 12.4.1, and fix the pnpm 12 Linux executable's loader and runtime libraries; thanks @jerome-benoit (#116, #117, #121).
 - Preserve canonical scoped npm package encoding and fully escape generated CI table cells; thanks @vincentkoc (#114).
 - Document declarative Gmail hook session keys and their allowed prefix to prevent rejected callbacks (#113).
 - Refresh Nixpkgs, Home Manager, the packaged OpenClaw tools, and the Linux QMD memory backend to 2.8.3, keeping bundled tool plugin sources aligned with the flake lock.
 - Refresh CI checkout to 7.0.1 and the Nix installer to 31.11.1, which fixes a Nix build crash.
+- Admit @vincentkoc to the existing maintainer-only CI actor lists for provenance, Linux, and macOS validation (2026-09-09).
+- Add an opt-in, non-main installed-baseline qualification for the unmodified `v2026.7.1` Nix recipe, using a disposable Linux VM and isolated macOS Home Manager profile. Build or startup failures block qualification without substituting packages; installed-generation upgrades remain unproven (2026-09-09).
+- Run Linux JavaScript contract tests with Node.js 22 from the repository's locked Nixpkgs input and disable the global flake registry for that command, avoiding registry fetch failures (2026-09-09).
+- Package upstream OpenClaw `2026.7.1-2`, retain runtime plugin version `2026.7.1` for correction releases, and repair the macOS `2026.7.1` app artifact hash; thanks @vincentkoc.
 
 ## 2026-09-04
 
