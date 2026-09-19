@@ -67,10 +67,9 @@ requireContract(
   "Nix environment resolver",
 );
 const realpathSource = importedOwner(policy, realpath, old ? "path" : "plugin-cache-files");
-requireContract(
-  declaration(realpathSource, realpath) ===
-    (old
-      ? `function safeRealpathSync(targetPath, cache) {
+const realpathDeclaration = declaration(realpathSource, realpath);
+const directRealpathDeclaration = old
+  ? `function safeRealpathSync(targetPath, cache) {
 \tconst cached = cache?.get(targetPath);
 \tif (cached) return cached;
 \ttry {
@@ -82,7 +81,7 @@ requireContract(
 \t\treturn null;
 \t}
 }`
-      : `function pluginCacheRealpathSync(targetPath, native = false) {
+  : `function pluginCacheRealpathSync(targetPath, native = false) {
 \tconst facts = pathFacts(targetPath);
 \tconst key = native ? "nativeRealpath" : "realpath";
 \tif (facts[key] === void 0) try {
@@ -92,6 +91,29 @@ requireContract(
 \t\tfacts[key] = null;
 \t}
 \treturn facts[key];
+}`;
+const canonicalRealpathDeclaration = `function pluginCacheRealpathSync(targetPath, native = false) {
+\tconst facts = pathFacts(targetPath);
+\tconst key = native ? "nativeRealpath" : "realpath";
+\tif (facts[key] === void 0) try {
+\t\tfacts[key] = native ? fs.realpathSync.native(targetPath) : resolveRealpath(targetPath);
+\t\tpathFacts(facts[key])[key] = facts[key];
+\t} catch {
+\t\tfacts[key] = null;
+\t}
+\treturn facts[key];
+}`;
+requireContract(
+  realpathDeclaration === directRealpathDeclaration ||
+    (!old &&
+      realpathDeclaration === canonicalRealpathDeclaration &&
+      declaration(realpathSource, "resolveRealpath") ===
+        `function resolveRealpath(targetPath) {
+\tconst absolute = path.resolve(targetPath);
+\ttry {
+\t\tif (absolute === targetPath && fs.realpathSync.native(targetPath) === targetPath) return targetPath;
+\t} catch {}
+\treturn fs.realpathSync(targetPath);
 }`),
   "realpath/cache",
 );
