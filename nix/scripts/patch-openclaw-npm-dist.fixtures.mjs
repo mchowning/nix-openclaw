@@ -102,6 +102,55 @@ function shouldRejectHardlinkedPluginFiles(params) {
 export { shouldRejectHardlinkedPluginFiles as t };
 `,
   );
+  const packageEntry = old ? null : `package-entry-resolution-fixture.${ext}`;
+  const boundary = old ? null : `boundary-file-read-fixture.${ext}`;
+  if (!old) {
+    put(
+      boundary,
+      `import fs from "node:fs";
+export const calls = [];
+async function openRootFile(params) {
+\tcalls.push(params);
+\treturn { ok: true, fd: fs.openSync("/dev/null", "r") };
+}
+function matchRootFileOpenFailure() { throw new Error("unexpected open failure"); }
+export { openRootFile as a, matchRootFileOpenFailure as i };
+`,
+    );
+    put(
+      `boundary-path-fixture.${ext}`,
+      `async function resolveRootPath() { return { exists: true }; }
+export { resolveRootPath as i };
+`,
+    );
+    put(
+      packageEntry,
+      `import { i as resolveRootPath } from "./boundary-path-fixture.${ext}";
+import { a as openRootFile, i as matchRootFileOpenFailure } from "./${boundary}";
+import fs from "node:fs";
+import path from "node:path";
+async function validatePackageExtensionEntry(params) {
+\tconst absolutePath = path.resolve(params.packageDir, params.entry);
+\ttry {
+\t\tif (!(await resolveRootPath({
+\t\t\tabsolutePath,
+\t\t\trootPath: params.packageDir,
+\t\t\tboundaryLabel: "plugin package directory"
+\t\t})).exists) return params.requireExisting ? { ok: false } : { ok: true, exists: false };
+\t} catch { return { ok: false }; }
+\tconst opened = await openRootFile({
+\t\tabsolutePath,
+\t\trootPath: params.packageDir,
+\t\tboundaryLabel: "plugin package directory"
+\t});
+\tif (!opened.ok) return matchRootFileOpenFailure(opened, { fallback: () => ({ ok: false }) });
+\tfs.closeSync(opened.fd);
+\treturn { ok: true, exists: true };
+}
+export { validatePackageExtensionEntry as v };
+`,
+    );
+  }
   const discovery = `discovery-fixture.${ext}`;
   put(
     discovery,
@@ -172,7 +221,7 @@ export { detectConfiguredPluginInstallHealthIssues as health, ${old ? "repairMis
 `,
   );
   fs.writeFileSync(path.join(root, "package.json"), '{"type":"module"}');
-  return { root, dist, put, policy, discovery, install, dependency };
+  return { root, dist, put, policy, discovery, install, dependency, packageEntry, boundary };
 }
 const run = (command, args, env) =>
   spawnSync(command, args, {

@@ -165,6 +165,54 @@ const patchedOwnership = ownership.replace(
   ),
 );
 
+let patchedPolicy = policy;
+let packageEntryTransform;
+if (!old) {
+  const [packageEntryName, packageEntry] = owner(
+    "async function validatePackageExtensionEntry",
+    "package entry validation chunk",
+  );
+  requireContract(
+    packageEntryName.endsWith(`.${ext}`) && !packageEntry.includes("isTrustedNixStorePluginRoot"),
+    "package entry Nix hardlink policy",
+  );
+  const openCall = `const opened = await openRootFile({
+\t\tabsolutePath,
+\t\trootPath: params.packageDir,
+\t\tboundaryLabel: "plugin package directory"
+\t});`;
+  const validator = declaration(packageEntry, "validatePackageExtensionEntry");
+  requireContract(validator.split(openCall).length === 2, "package entry root open");
+  const trustedRootHelper = `function isTrustedNixStorePluginRoot(params) {
+\treturn resolveIsNixMode(params.env) && isNixStorePluginRoot(params.rootDir);
+}
+`;
+  patchedPolicy = policy
+    .replace(
+      "resolveIsNixMode(params.env) && isNixStorePluginRoot(params.rootDir)",
+      "isTrustedNixStorePluginRoot(params)",
+    )
+    .replace(
+      "function shouldRejectHardlinkedPluginFiles(params) {",
+      `${trustedRootHelper}function shouldRejectHardlinkedPluginFiles(params) {`,
+    )
+    .replace(
+      "export { shouldRejectHardlinkedPluginFiles as t };",
+      "export { isTrustedNixStorePluginRoot as i, shouldRejectHardlinkedPluginFiles as t };",
+    );
+  requireContract(patchedPolicy !== policy, "Nix hardlink helper transform");
+  const patchedPackageEntry =
+    `import { i as isTrustedNixStorePluginRoot } from "./${policyName}";\n` +
+    packageEntry.replace(
+      openCall,
+      openCall.replace(
+        '\n\t});',
+        ',\n\t\trejectHardlinks: !isTrustedNixStorePluginRoot({ rootDir: params.packageDir, env: process.env })\n\t});',
+      ),
+    );
+  packageEntryTransform = [packageEntryName, patchedPackageEntry];
+}
+
 const loop = "for (const candidate of collectDownloadableInstallCandidates({";
 const [installName, install] = owner(
   'Failed to install missing configured plugin "',
@@ -187,9 +235,13 @@ for (const name of functions) {
 const patchedInstall = install.replaceAll(loop, `if ((params.env ?? process.env).OPENCLAW_NIX_MODE !== "1") ${loop}`);
 
 // No contract failure may leave the earlier ownership transform partially written.
-for (const [name, source] of [
+const transforms = [
   [ownershipName, patchedOwnership],
   [installName, patchedInstall],
-]) {
+];
+if (packageEntryTransform) {
+  transforms.push([policyName, patchedPolicy], packageEntryTransform);
+}
+for (const [name, source] of transforms) {
   fs.writeFileSync(path.join(distDir, name), source);
 }

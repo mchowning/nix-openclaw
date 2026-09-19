@@ -49,6 +49,26 @@ for (const ext of ["js", "mjs"]) {
     assert.equal(check(params).reason, "path_stat_failed");
     // Existing lexical fallback is retained when realpath fails.
     assert.equal(policy({ ...params, rootDir: "/nix/store/nonexistent" }), false);
+    if (f.packageEntry) {
+      const validatePackageEntry = (await load(f, f.packageEntry)).v;
+      const boundary = await load(f, f.boundary);
+      process.env.OPENCLAW_NIX_MODE = "1";
+      await validatePackageEntry({
+        packageDir: "/nix/store/plugin",
+        entry: "index.js",
+        label: "extension entry",
+        requireExisting: true,
+      });
+      assert.equal(boundary.calls.at(-1).rejectHardlinks, false);
+      process.env.OPENCLAW_NIX_MODE = "0";
+      await validatePackageEntry({
+        packageDir: "/nix/store/plugin",
+        entry: "index.js",
+        label: "extension entry",
+        requireExisting: true,
+      });
+      assert.equal(boundary.calls.at(-1).rejectHardlinks, true);
+    }
   });
   test(`${ext}: real filesystem escapes, permissions and hardlinks stay independent`, async (t) => {
     const f = fixture(t, ext);
@@ -107,8 +127,19 @@ for (const ext of ["js", "mjs"]) {
     "env-contract": ["environment", '=== "1"', '!== "0"'],
     "late-loop": ["install", "HealthIssues", "UnrecognizedHealth"],
     "mixed-patched": ["install", "\tfor (const candidate", "\tif (true) for (const candidate"],
+    ...(ext === "mjs"
+      ? {
+          "entry-boundary": [
+            "packageEntry",
+            "const opened = await openRootFile({",
+            "const opened = await openRootFileChanged({",
+          ],
+        }
+      : {}),
   };
-  const missing = ["policy", "discovery", "install"].flatMap((role) => [`missing-${role}`, `duplicate-${role}`]);
+  const missing = ["policy", "discovery", "install", ...(ext === "mjs" ? ["packageEntry"] : [])].flatMap(
+    (role) => [`missing-${role}`, `duplicate-${role}`],
+  );
   const ownerFaults = [...missing, ...Object.keys(mutations), "co-located"];
   for (const fault of [...ownerFaults, "nested-only", "symlink-only", "directory-only"]) {
     test(`${ext}: rejects ${fault} before any write`, (t) => {
