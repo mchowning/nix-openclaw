@@ -26,6 +26,7 @@
   discord = import ./discord.nix;
   duckduckgo = import ./duckduckgo.nix;
   exa = import ./exa.nix;
+  facetime = import ./facetime.nix;
   featherless = import ./featherless.nix;
   feishu = import ./feishu.nix;
   firecrawl = import ./firecrawl.nix;
@@ -56,6 +57,7 @@
   nextcloud-talk = import ./nextcloudTalk.nix;
   nostr = import ./nostr.nix;
   novita = import ./novita.nix;
+  onnx = import ./onnx.nix;
   opencode = import ./opencode.nix;
   openshell = import ./openshell.nix;
   parallel = import ./parallel.nix;
@@ -79,6 +81,7 @@
   tlon = import ./tlon.nix;
   tokenjuice = import ./tokenjuice.nix;
   twitch = import ./twitch.nix;
+  typesafe = import ./typesafe.nix;
   venice = import ./venice.nix;
   vercel-ai-gateway = import ./vercelAiGateway.nix;
   voice-call = import ./voiceCall.nix;

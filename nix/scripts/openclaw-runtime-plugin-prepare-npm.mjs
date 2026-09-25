@@ -140,7 +140,15 @@ function prepare() {
   }
 
   const lockChanged = normalizeLockedDependencySpecs(lock);
-  if (packageJson.devDependencies) {
+  // The 2026.9.6 ACPX tarball declares 0.19.0; its release-bound evidence pins 0.19.1.
+  const correctAcpxReleaseManifest = dependencyMode === "package-lock"
+    && expectedPackageName === "@openclaw/acpx"
+    && expectedVersion === "2026.9.6"
+    && packageJson.dependencies?.acpx === "0.19.0"
+    && rootLock?.dependencies?.acpx === "0.19.1"
+    && lock.packages?.["node_modules/acpx"]?.version === "0.19.1";
+  if (correctAcpxReleaseManifest) packageJson.dependencies.acpx = "0.19.1";
+  if (packageJson.devDependencies || correctAcpxReleaseManifest) {
     delete packageJson.devDependencies;
     writeJson(packageJsonPath, packageJson);
   }
