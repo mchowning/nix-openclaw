@@ -67,6 +67,20 @@ requireContract(
   "Nix environment resolver",
 );
 const realpathSource = importedOwner(policy, realpath, old ? "path" : "plugin-cache-files");
+const optimizedRealpath = !old && realpathSource.includes("function resolveRealpath(");
+if (optimizedRealpath) {
+  requireContract(
+    declaration(realpathSource, "resolveRealpath") ===
+      `function resolveRealpath(targetPath) {
+\tconst absolute = path.resolve(targetPath);
+\ttry {
+\t\tif (absolute === targetPath && fs.realpathSync.native(targetPath) === targetPath) return targetPath;
+\t} catch {}
+\treturn fs.realpathSync(targetPath);
+}`,
+    "canonical realpath helper",
+  );
+}
 const realpathDeclaration = declaration(realpathSource, realpath);
 const directRealpathDeclaration = old
   ? `function safeRealpathSync(targetPath, cache) {
@@ -85,38 +99,14 @@ const directRealpathDeclaration = old
 \tconst facts = pathFacts(targetPath);
 \tconst key = native ? "nativeRealpath" : "realpath";
 \tif (facts[key] === void 0) try {
-\t\tfacts[key] = native ? fs.realpathSync.native(targetPath) : fs.realpathSync(targetPath);
+\t\tfacts[key] = native ? fs.realpathSync.native(targetPath) : ${optimizedRealpath ? "resolveRealpath" : "fs.realpathSync"}(targetPath);
 \t\tpathFacts(facts[key])[key] = facts[key];
 \t} catch {
 \t\tfacts[key] = null;
 \t}
 \treturn facts[key];
 }`;
-const canonicalRealpathDeclaration = `function pluginCacheRealpathSync(targetPath, native = false) {
-\tconst facts = pathFacts(targetPath);
-\tconst key = native ? "nativeRealpath" : "realpath";
-\tif (facts[key] === void 0) try {
-\t\tfacts[key] = native ? fs.realpathSync.native(targetPath) : resolveRealpath(targetPath);
-\t\tpathFacts(facts[key])[key] = facts[key];
-\t} catch {
-\t\tfacts[key] = null;
-\t}
-\treturn facts[key];
-}`;
-requireContract(
-  realpathDeclaration === directRealpathDeclaration ||
-    (!old &&
-      realpathDeclaration === canonicalRealpathDeclaration &&
-      declaration(realpathSource, "resolveRealpath") ===
-        `function resolveRealpath(targetPath) {
-\tconst absolute = path.resolve(targetPath);
-\ttry {
-\t\tif (absolute === targetPath && fs.realpathSync.native(targetPath) === targetPath) return targetPath;
-\t} catch {}
-\treturn fs.realpathSync(targetPath);
-}`),
-  "realpath/cache",
-);
+requireContract(realpathDeclaration === directRealpathDeclaration, "realpath/cache");
 // Match complete decisions, retaining newlines (including JavaScript return/ASI semantics).
 const policyBody = policy
   .replace(

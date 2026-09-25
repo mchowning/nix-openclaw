@@ -7,6 +7,9 @@ Older repository history is available in git.
 ## Unreleased
 
 - Refresh Nixpkgs, Home Manager, bundled OpenClaw tools and example-plugin inputs, and update the private pnpm 11 runtime to 11.27.0.
+- Refresh Nix inputs and the example plugin lock, and update private source-build pnpm runtimes to 11.27.1 and 12.6.0.
+- Prevent newly published backports from downgrading the selected gateway or macOS app; order stable releases and numeric corrections by version.
+- Accept OpenClaw 2026.9.5's verified canonical-realpath helper and discovery import layout during packaging while preserving the existing ownership, path, and hardlink guards.
 - Restore source gateway builds through upstream build and production-deployment entry points, with verified offline pnpm stores and complete workspace dependencies.
 - Make source-build provenance reproducible with `SOURCE_DATE_EPOCH` and record the known pinned Git commit.
 - Fix source-build commands failing when Nix timing output is disabled.
@@ -21,6 +24,8 @@ Older repository history is available in git.
 - Update the source-build Node addon headers to `node-addon-api` 8.9.2; retain the existing Node 24 runtime floor.
 - Compatibility: stop advertising the retired Garnix cache (`cache.garnix.io` returns NXDOMAIN); builds use the operator's configured substituters and the default NixOS cache.
 - Compatibility: fix the hello-world plugin example by exporting the host-system function at the top level, locking its inputs, and installing the documented `hello-world` executable (previously emitted as `hello-world-openclaw`).
+
+- Keep the shared macOS app pin on the universal ZIP when upstream also publishes architecture-specific ZIPs; source updates remain independent when the universal app lags.
 
 ## 2026.9.4 - 2026-09-11
 
