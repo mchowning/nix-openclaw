@@ -13,22 +13,22 @@
   minHostVersion = ">=2026.4.25";
   expectedIntegrity = "";
   packageName = "@openclaw/acpx";
-  version = "2026.9.6";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/acpx/-/acpx-2026.9.6.tgz";
-  npmIntegrity = "sha512-x04/aAeVrlXaCs9oysYFbvJBDswWPV6SegCK+cyfJ6tYVKKfdeSv3nqHBohg0UcBw1QexWq8YWklG4iomeXpQg==";
-  npmShasum = "69b350a2e9ea63789d03468ad307c9ea099da33e";
-  nixHash = "sha256-7em45rwhektrGZ92cUtSQlx0yj/HrO5qhtETvz8XaNA=";
+  version = "2026.9.7";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/acpx/-/acpx-2026.9.7.tgz";
+  npmIntegrity = "sha512-kMppSHRzoJ1+tnrFIsVR1kx0KAkWpD35cs4ExmZTVneGnot7i5Ha8ioNKEovUmTWGdbqjdG/GMqLhkkbBqTG8g==";
+  npmShasum = "558a9405c5dec1fa82318dedd627d21f337a6870";
+  nixHash = "sha256-orEMchigm+N0RG+HN1zJvDFohfs/0kMGzeJmjgL3hZ0=";
   dependencyMode = "package-lock";
-  npmDepsHash = "sha256-Oe6WlnTcJ4rVWm3W7Q1JOoa1L5T4LWU8eFphCU1SQp0=";
+  npmDepsHash = "sha256-BkcD7mbiiznbDIzDGzDQD8zfvd2gGBx7s+O34RPS82o=";
   npmPackageLockFile = "acpx.package-lock.json";
-  npmPackageLockSha256 = "89ca5ec69187a474ef80333f7357ccc7fc37416cf70829bb59a0a191cc23859d";
+  npmPackageLockSha256 = "345b76f4452e91622a05ef755666e40c02ac0e67b65a1552da08d6d6900991a9";
   npmPackageLockEvidence = {
-    assetName = "openclaw-2026.9.6-dependency-evidence.zip";
-    assetUrl = "https://github.com/openclaw/openclaw/releases/download/v2026.9.6/openclaw-2026.9.6-dependency-evidence.zip";
-    assetNixHash = "sha256-sJX58a1Jzk7W1GiYHBW+OjzVLmiiyuM8viTciJVjJrM=";
+    assetName = "openclaw-2026.9.7-dependency-evidence.zip";
+    assetUrl = "https://github.com/openclaw/openclaw/releases/download/v2026.9.7/openclaw-2026.9.7-dependency-evidence.zip";
+    assetNixHash = "sha256-SRsk3iARynvHazCpejAOl45/VBUQMqGG0PJkcaWIRIc=";
     source = "release";
-    sourceSha = "eb377ac59e6c9fd6c7705028034812becf00271b";
-    generatedAt = "2026-09-23T16:40:38.828Z";
+    sourceSha = "c074824a27c96d3983043f9eeb33823cd1772d8c";
+    generatedAt = "2026-09-29T23:40:32.142Z";
   };
   manifestId = "acpx";
   openclawCompat = ">=2026.9.5";
@@ -42,7 +42,7 @@
   dependencies = {
     "@agentclientprotocol/claude-agent-acp" = "0.76.0";
     "@agentclientprotocol/codex-acp" = "1.11.0";
-    acpx = "0.19.0";
+    acpx = "0.19.1";
     smol-toml = "1.8.0";
     zod = "4.6.5";
   };

@@ -1,4 +1,4 @@
-# Generated from upstream OpenClaw schema at rev eb377ac59e6c9fd6c7705028034812becf00271b. DO NOT EDIT.
+# Generated from upstream OpenClaw schema at rev c074824a27c96d3983043f9eeb33823cd1772d8c. DO NOT EDIT.
 # Generator: nix/scripts/generate-config-options.ts
 { lib }:
 let
@@ -360,6 +360,10 @@ in
       };
       experimental = lib.mkOption {
         type = t.nullOr (t.submodule { options = {
+        decisionAssistance = lib.mkOption {
+          type = t.nullOr (t.bool);
+          default = null;
+        };
         localModelLean = lib.mkOption {
           type = t.nullOr (t.bool);
           default = null;
@@ -1025,6 +1029,7 @@ in
         maxConcurrent = lib.mkOption {
           type = t.nullOr (t.int);
           default = null;
+          description = "Maximum concurrent child-agent runs per immediate spawning/controller session (default: 8). Independent sessions have independent budgets.";
         };
         maxSpawnDepth = lib.mkOption {
           type = t.nullOr (t.int);
@@ -2577,6 +2582,32 @@ in
         type = t.nullOr (t.listOf (t.str));
         default = null;
       };
+      slack = lib.mkOption {
+        type = t.nullOr (t.submodule { options = {
+        approvers = lib.mkOption {
+          type = t.nullOr (t.listOf (t.str));
+          default = null;
+        };
+        plugins = lib.mkOption {
+          type = t.nullOr (t.attrsOf (t.submodule { options = {
+          approvers = lib.mkOption {
+            type = t.nullOr (t.listOf (t.str));
+            default = null;
+          };
+          tools = lib.mkOption {
+            type = t.nullOr (t.attrsOf (t.submodule { options = {
+            approvers = lib.mkOption {
+              type = t.listOf (t.str);
+            };
+          }; }));
+            default = null;
+          };
+        }; }));
+          default = null;
+        };
+      }; });
+        default = null;
+      };
       targets = lib.mkOption {
         type = t.nullOr (t.listOf (t.submodule { options = {
         accountId = lib.mkOption {
@@ -2849,6 +2880,10 @@ in
       };
       driver = lib.mkOption {
         type = t.nullOr (t.oneOf [ (t.enum [ "openclaw" ]) (t.enum [ "clawd" ]) (t.enum [ "existing-session" ]) (t.enum [ "extension" ]) ]);
+        default = null;
+      };
+      engine = lib.mkOption {
+        type = t.nullOr (t.enum [ "chromium" "lightpanda" ]);
         default = null;
       };
       executablePath = lib.mkOption {
@@ -3577,6 +3612,10 @@ in
       }; });
         default = null;
       };
+      newSessionModelDefaults = lib.mkOption {
+        type = t.nullOr (t.enum [ "last-used" "configured" ]);
+        default = null;
+      };
       root = lib.mkOption {
         type = t.nullOr (t.str);
         default = null;
@@ -3968,6 +4007,23 @@ in
         agents = lib.mkOption {
           type = t.oneOf [ (t.enum [ "*" ]) (t.anything) ];
         };
+        modelPolicy = lib.mkOption {
+          type = t.nullOr (t.submodule { options = {
+          allow = lib.mkOption {
+            type = t.nullOr (t.listOf (t.str));
+            default = null;
+          };
+          deny = lib.mkOption {
+            type = t.nullOr (t.listOf (t.str));
+            default = null;
+          };
+          sourceAgent = lib.mkOption {
+            type = t.nullOr (t.anything);
+            default = null;
+          };
+        }; });
+          default = null;
+        };
         sandbox = lib.mkOption {
           type = t.nullOr (t.enum [ "inherit" "required" ]);
           default = null;
@@ -4057,6 +4113,15 @@ in
     };
     trustedProxies = lib.mkOption {
       type = t.nullOr (t.listOf (t.str));
+      default = null;
+    };
+    uploads = lib.mkOption {
+      type = t.nullOr (t.submodule { options = {
+      enabled = lib.mkOption {
+        type = t.nullOr (t.bool);
+        default = null;
+      };
+    }; });
       default = null;
     };
   }; });
@@ -4899,7 +4964,7 @@ in
         default = null;
       };
       api = lib.mkOption {
-        type = t.nullOr (t.enum [ "openai-completions" "openai-responses" "openai-chatgpt-responses" "anthropic-messages" "google-generative-ai" "google-vertex" "github-copilot" "bedrock-converse-stream" "ollama" "pi-messages" "azure-openai-responses" ]);
+        type = t.nullOr (t.enum [ "openai-completions" "openai-responses" "openai-chatgpt-responses" "anthropic-messages" "google-generative-ai" "google-interactions" "google-vertex" "github-copilot" "bedrock-converse-stream" "ollama" "pi-messages" "azure-openai-responses" ]);
         default = null;
       };
       apiKey = lib.mkOption {
@@ -4994,7 +5059,7 @@ in
           default = null;
         };
         api = lib.mkOption {
-          type = t.nullOr (t.enum [ "openai-completions" "openai-responses" "openai-chatgpt-responses" "anthropic-messages" "google-generative-ai" "google-vertex" "github-copilot" "bedrock-converse-stream" "ollama" "pi-messages" "azure-openai-responses" ]);
+          type = t.nullOr (t.enum [ "openai-completions" "openai-responses" "openai-chatgpt-responses" "anthropic-messages" "google-generative-ai" "google-interactions" "google-vertex" "github-copilot" "bedrock-converse-stream" "ollama" "pi-messages" "azure-openai-responses" ]);
           default = null;
         };
         baseUrl = lib.mkOption {
@@ -8892,10 +8957,6 @@ in
     };
     toolSearch = lib.mkOption {
       type = t.nullOr (t.oneOf [ (t.bool) (t.submodule { options = {
-      codeTimeoutMs = lib.mkOption {
-        type = t.nullOr (t.int);
-        default = null;
-      };
       enabled = lib.mkOption {
         type = t.nullOr (t.bool);
         default = null;
@@ -8905,7 +8966,7 @@ in
         default = null;
       };
       mode = lib.mkOption {
-        type = t.nullOr (t.enum [ "code" "tools" "directory" ]);
+        type = t.nullOr (t.enum [ "tools" "directory" ]);
         default = null;
       };
       searchDefaultLimit = lib.mkOption {

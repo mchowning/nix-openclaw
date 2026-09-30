@@ -24,11 +24,12 @@ const root = process.env.OPENCLAW_PACKAGE_ROOT;
 if (!root) fail("OPENCLAW_PACKAGE_ROOT is required");
 const distDir = path.join(root, "dist");
 if (!fs.existsSync(distDir)) fail(`OpenClaw dist directory missing: ${distDir}`);
-// The sealed worker is another build graph. Only regular root modules own these transforms.
+// Sealed workers are separate build graphs, not owners of regular module transforms.
 const modules = new Map(
   fs
     .readdirSync(distDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /\.m?js$/.test(entry.name))
+    .filter((entry) => entry.isFile() && /\.m?js$/.test(entry.name)
+      && entry.name !== "package-update-activation-recovery.mjs")
     .map((entry) => [entry.name, fs.readFileSync(path.join(distDir, entry.name), "utf8")]),
 );
 const owner = (marker, label) =>

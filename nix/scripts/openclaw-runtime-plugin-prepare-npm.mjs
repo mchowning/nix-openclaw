@@ -148,7 +148,24 @@ function prepare() {
     && rootLock?.dependencies?.acpx === "0.19.1"
     && lock.packages?.["node_modules/acpx"]?.version === "0.19.1";
   if (correctAcpxReleaseManifest) packageJson.dependencies.acpx = "0.19.1";
-  if (packageJson.devDependencies || correctAcpxReleaseManifest) {
+  // The 2026.9.7 tarball retained older ACP versions and omitted fs-safe.
+  const acpx97Dependencies = {
+    "@agentclientprotocol/claude-agent-acp": ["0.76.0", "0.79.0"],
+    "@agentclientprotocol/codex-acp": ["1.11.0", "1.12.0"],
+    "@openclaw/fs-safe": [undefined, "0.21.1"],
+    acpx: ["0.19.1", "0.19.1"], "smol-toml": ["1.8.0", "1.8.0"], zod: ["4.6.5", "4.6.5"],
+  };
+  const correctAcpx97Manifest = dependencyMode === "package-lock"
+    && expectedPackageName === "@openclaw/acpx"
+    && expectedVersion === "2026.9.7"
+    && Object.keys(packageJson.dependencies ?? {}).length === 5
+    && Object.keys(rootLock?.dependencies ?? {}).length === 6
+    && Object.entries(acpx97Dependencies).every(([name, [published, locked]]) =>
+      packageJson.dependencies[name] === published
+      && rootLock.dependencies[name] === locked
+      && lock.packages?.[`node_modules/${name}`]?.version === locked);
+  if (correctAcpx97Manifest) packageJson.dependencies = { ...rootLock.dependencies };
+  if (packageJson.devDependencies || correctAcpxReleaseManifest || correctAcpx97Manifest) {
     delete packageJson.devDependencies;
     writeJson(packageJsonPath, packageJson);
   }

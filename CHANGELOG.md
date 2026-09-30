@@ -6,6 +6,9 @@ Older repository history is available in git.
 
 ## Unreleased
 
+- Package OpenClaw 2026.9.7 with refreshed config and 95 runtime-plugin locks; retain the latest public macOS app, 2026.9.6.
+- Correct the known ACPX 2026.9.7 manifest mismatch only in the build copy, preserve published dependency evidence, and adapt strict source/dist checks to the new discovery flow and standalone recovery worker.
+
 - Refresh Nixpkgs, Home Manager, bundled OpenClaw tools and example-plugin inputs, and update the private pnpm 11 runtime to 11.27.0.
 - Refresh Nix inputs and the example plugin lock, and update private source-build pnpm runtimes to 11.27.1 and 12.6.0.
 - Prevent newly published backports from downgrading the selected gateway or macOS app; order stable releases and numeric corrections by version.

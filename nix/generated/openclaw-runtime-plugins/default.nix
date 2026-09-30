@@ -77,6 +77,7 @@
   tavily = import ./tavily.nix;
   team-reports = import ./teamReports.nix;
   teams-meetings = import ./teamsMeetings.nix;
+  telnyx = import ./telnyx.nix;
   tencent = import ./tencent.nix;
   tlon = import ./tlon.nix;
   tokenjuice = import ./tokenjuice.nix;

@@ -57,7 +57,8 @@ if (fs.existsSync(modules)) {
 }
 const dist = path.join(root, "dist");
 const loaders = fs.readdirSync(dist, { withFileTypes: true })
-  .filter((entry) => entry.isFile() && /\.m?js$/.test(entry.name))
+  .filter((entry) => entry.isFile() && /\.m?js$/.test(entry.name)
+    && entry.name !== "package-update-activation-recovery.mjs")
   .map((entry) => path.join(dist, entry.name))
   .filter((file) => fs.readFileSync(file, "utf8").includes("function loadBundledPluginPublicArtifactModuleSync"));
 if (loaders.length !== 1) {

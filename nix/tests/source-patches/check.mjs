@@ -31,7 +31,7 @@ try {
   policy = policy.replace(/^import .*;\n/gm, "").replaceAll("export function", "function");
   const discovery = fs.readFileSync(path.join(root, "src/plugins/discovery.ts"), "utf8");
   const start = discovery.indexOf("function checkPathStatAndPermissions(");
-  const end = discovery.indexOf("function formatCandidateBlockMessage(", start);
+  const end = discovery.indexOf("function isExtensionFile(", start);
   assert.ok(start >= 0 && end > start);
   const code = stripTypeScriptTypes(policy + discovery.slice(start, end));
   let stat = { mode: 0o555, uid: 30001 };
@@ -42,21 +42,29 @@ try {
     pluginCacheRealpathSync: (file) => realpaths.get(file) ?? file,
     pluginCacheStatSync: () => stat,
     currentUid: (uid) => uid,
+    formatPosixMode: (mode) => mode.toString(8),
     checkSourceEscapesRoot: () => null,
     fs: { chmodSync: () => { throw new Error("fixture cannot chmod"); } },
   });
   vm.runInContext(code, context);
   const params = (rootDir, nix) => ({ rootDir, source: `${rootDir}/index.js`, origin: "config", uid: 1000, ownershipUid: 1000, env: { OPENCLAW_NIX_MODE: nix } });
-  assert.equal(context.findCandidateBlockIssue(params("/nix/store/plugin", "1")), null);
-  assert.equal(context.findCandidateBlockIssue(params("/nix/store/plugin", "0")).reason, "path_suspicious_ownership");
-  assert.equal(context.findCandidateBlockIssue(params("/tmp/plugin", "1")).reason, "path_suspicious_ownership");
-  assert.equal(context.findCandidateBlockIssue(params("/nix/store-other/plugin", "1")).reason, "path_suspicious_ownership");
+  const checkCandidate = (input, reason, message) => {
+    assert.equal(context.checkPathStatAndPermissions(input)?.reason ?? null, reason);
+    const diagnostics = [];
+    assert.equal(context.isUnsafePluginCandidate({ ...input, diagnostics }), reason !== null);
+    assert.equal(diagnostics.length, reason === null ? 0 : 1);
+    if (message) assert.match(diagnostics[0].message, message);
+  };
+  checkCandidate(params("/nix/store/plugin", "1"), null);
+  checkCandidate(params("/nix/store/plugin", "0"), "path_suspicious_ownership", /suspicious ownership/);
+  checkCandidate(params("/tmp/plugin", "1"), "path_suspicious_ownership", /suspicious ownership/);
+  checkCandidate(params("/nix/store-other/plugin", "1"), "path_suspicious_ownership", /suspicious ownership/);
   realpaths.set("/nix/store/escaped", "/tmp/plugin");
-  assert.equal(context.findCandidateBlockIssue(params("/nix/store/escaped", "1")).reason, "path_suspicious_ownership");
+  checkCandidate(params("/nix/store/escaped", "1"), "path_suspicious_ownership", /suspicious ownership/);
   stat = { mode: 0o777, uid: 30001 };
-  assert.equal(context.findCandidateBlockIssue(params("/nix/store/plugin", "1")).reason, "path_world_writable");
+  checkCandidate(params("/nix/store/plugin", "1"), "path_world_writable", /world-writable/);
   stat = null;
-  assert.equal(context.findCandidateBlockIssue(params("/nix/store/plugin", "1")).reason, "path_stat_failed");
+  checkCandidate(params("/nix/store/plugin", "1"), "path_stat_failed", /cannot stat/);
   assert.equal(context.shouldRejectHardlinkedPluginFiles(params("/nix/store/plugin", "1")), false);
   assert.equal(context.shouldRejectHardlinkedPluginFiles(params("/tmp/plugin", "1")), true);
 

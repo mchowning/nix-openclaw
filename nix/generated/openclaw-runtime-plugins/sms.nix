@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.6.9";
   expectedIntegrity = "";
   packageName = "@openclaw/sms";
-  version = "2026.9.6";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/sms/-/sms-2026.9.6.tgz";
-  npmIntegrity = "sha512-L+0Y/dNaFF+VRpqvfyFyu8ib5XTxb5tT7FR4Zl+RCYkZh3grgsUrKKpQFzvVJ6nyL1bPcf05R4v3KZFu0rlNag==";
-  npmShasum = "43d972da664501d02e21f454fffac1b9b3d59a52";
-  nixHash = "sha256-wG1NIlWIU0Bw7GXJRHVsbFauPDLmarPvXXfASK09GPA=";
+  version = "2026.9.7";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/sms/-/sms-2026.9.7.tgz";
+  npmIntegrity = "sha512-6TaIv4yZw2qZGmH0+ERJg/7hMrvNLQRSVzXo78+jXP7RK+dteGoDSoTvlTqQDiW+lTeg1uzP3IH8ovLAb7Vftg==";
+  npmShasum = "247472b14c55b68169f6c21ed05af789d9f040d4";
+  nixHash = "sha256-zC1Z3tD6Z0vZZkavw6NWtPt1VKfH/xWH3EKF2RUXbBo=";
   dependencyMode = "bundled";
   manifestId = "sms";
-  openclawCompat = ">=2026.9.6";
-  peerOpenClaw = ">=2026.9.6";
+  openclawCompat = ">=2026.9.7";
+  peerOpenClaw = ">=2026.9.7";
   runtimeExtensions = [
     "./dist/index.js"
   ];
