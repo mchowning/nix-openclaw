@@ -70,6 +70,7 @@
   searxng = import ./searxng.nix;
   signal = import ./signal.nix;
   slack = import ./slack.nix;
+  slack-huddles = import ./slackHuddles.nix;
   sms = import ./sms.nix;
   stepfun = import ./stepfun.nix;
   synology-chat = import ./synologyChat.nix;

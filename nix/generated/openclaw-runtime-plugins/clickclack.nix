@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.6.9";
   expectedIntegrity = "";
   packageName = "@openclaw/clickclack";
-  version = "2026.9.7";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/clickclack/-/clickclack-2026.9.7.tgz";
-  npmIntegrity = "sha512-JXeWIBAQncjFC9fZe9kj/vY52zg9J1xTZwp+4Bt97WBXsWoOg7+tV692gYF4TFhJ6jJUjvP0EBpC5oRyqWMSaQ==";
-  npmShasum = "79cac6f5a109dd03c8ffd8158b0875051d4bfa2c";
-  nixHash = "sha256-Qd51oKQDOWGTAFMP/2v28TO8JG2C7wDmgun+oh/P4FQ=";
+  version = "2026.9.9";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/clickclack/-/clickclack-2026.9.9.tgz";
+  npmIntegrity = "sha512-4KCnnHcTTNNgukkdYqEopv7SGCd3vGIlqQYJmO/zVw41gixjZUHGdxRjE99BcIZ8TIT/bnIc2cNYEPO/WyURDA==";
+  npmShasum = "32e65b14e702e8cde3afc8e881221d1e25b136ea";
+  nixHash = "sha256-rpKPfFdV/WZ+oyWwh6EXfHSlFNEgLeiIlI3SC/mFMnc=";
   dependencyMode = "bundled";
   manifestId = "clickclack";
-  openclawCompat = ">=2026.9.7";
-  peerOpenClaw = ">=2026.9.7";
+  openclawCompat = ">=2026.9.9";
+  peerOpenClaw = ">=2026.9.9";
   runtimeExtensions = [
     "./dist/index.js"
   ];

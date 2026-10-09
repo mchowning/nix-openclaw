@@ -1,4 +1,4 @@
-# Generated from upstream OpenClaw schema at rev c074824a27c96d3983043f9eeb33823cd1772d8c. DO NOT EDIT.
+# Generated from upstream OpenClaw schema at rev bcfc88812a35243893585dbeca87ca41b48272ca. DO NOT EDIT.
 # Generator: nix/scripts/generate-config-options.ts
 { lib }:
 let
@@ -952,10 +952,6 @@ in
       silentReply = lib.mkOption {
         type = t.nullOr (t.submodule { options = {
         group = lib.mkOption {
-          type = t.nullOr (t.oneOf [ (t.enum [ "allow" ]) (t.enum [ "disallow" ]) ]);
-          default = null;
-        };
-        internal = lib.mkOption {
           type = t.nullOr (t.oneOf [ (t.enum [ "allow" ]) (t.enum [ "disallow" ]) ]);
           default = null;
         };
@@ -6714,10 +6710,6 @@ in
     silentReply = lib.mkOption {
       type = t.nullOr (t.submodule { options = {
       group = lib.mkOption {
-        type = t.nullOr (t.oneOf [ (t.enum [ "allow" ]) (t.enum [ "disallow" ]) ]);
-        default = null;
-      };
-      internal = lib.mkOption {
         type = t.nullOr (t.oneOf [ (t.enum [ "allow" ]) (t.enum [ "disallow" ]) ]);
         default = null;
       };

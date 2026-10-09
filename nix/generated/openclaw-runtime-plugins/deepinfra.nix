@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.6.8";
   expectedIntegrity = "";
   packageName = "@openclaw/deepinfra-provider";
-  version = "2026.9.7";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/deepinfra-provider/-/deepinfra-provider-2026.9.7.tgz";
-  npmIntegrity = "sha512-6GBXVcJViK7hDInWqBnsFuuBAZfqe0D3wzuOhv/2IeMw3HnL/5vbDmAijKCpd3P4tjlS6sL9LC/6JzysXJf8vg==";
-  npmShasum = "2ae24e3c3f23b169001cd466a4d24047a7dcb3e7";
-  nixHash = "sha256-AEZ0Tgl8KVcfEeNSKFK7gwrHW+L1QZDCKkpIXWh6Les=";
+  version = "2026.9.9";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/deepinfra-provider/-/deepinfra-provider-2026.9.9.tgz";
+  npmIntegrity = "sha512-6jtm/RwApKHTkCxzTfLNHVfgP4xe6SMZc+o7HiWT7fPTVXmoRbRR8WxffLnOfFpskGJfQUblmaGGg45ctsqzsg==";
+  npmShasum = "065117b3243d67761aab88946c99cd4b8705a665";
+  nixHash = "sha256-0uju4jPxrUQg451Z/w/tq6Q5xl752dqXyNO31WsH6T0=";
   dependencyMode = "none";
   manifestId = "deepinfra";
-  openclawCompat = ">=2026.9.7";
-  peerOpenClaw = ">=2026.9.7";
+  openclawCompat = ">=2026.9.9";
+  peerOpenClaw = ">=2026.9.9";
   runtimeExtensions = [
     "./dist/index.js"
   ];

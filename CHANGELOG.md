@@ -6,6 +6,8 @@ Older repository history is available in git.
 
 ## Unreleased
 
+- Package OpenClaw 2026.9.9, the matching public macOS app, and 96 runtime plugins, including the new Slack Huddles catalog entry.
+
 - Package OpenClaw 2026.9.7 with refreshed config and 95 runtime-plugin locks; retain the latest public macOS app, 2026.9.6.
 - Correct the known ACPX 2026.9.7 manifest mismatch only in the build copy, preserve published dependency evidence, and adapt strict source/dist checks to the new discovery flow and standalone recovery worker.
 

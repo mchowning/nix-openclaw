@@ -13,26 +13,26 @@
   minHostVersion = ">=2026.5.31";
   expectedIntegrity = "";
   packageName = "@openclaw/memory-lancedb";
-  version = "2026.9.7";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/memory-lancedb/-/memory-lancedb-2026.9.7.tgz";
-  npmIntegrity = "sha512-5XwPWhIgwvXyL48XlvXZzCh0NsDxOIynjOO4jGp3bErlRGUvZV4npT1+qRzuuBGAt85/neexiS3eq+hkhKKuAg==";
-  npmShasum = "a5b6d3fcfc49887266c41cc39a7403d3d6ef49f4";
-  nixHash = "sha256-ZQI+zwijAH31dJU8AWUiG031HYHe9kqsH3clwxg0dB4=";
+  version = "2026.9.9";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/memory-lancedb/-/memory-lancedb-2026.9.9.tgz";
+  npmIntegrity = "sha512-eZzknJOmQAJaS2gVfrGgM4UeeqCGlGh5qbrGK/kzjb3Zxyxx2KnCTbTgE/zH8gDSR5Pe1W/DOm9AYEbCQ6t+8w==";
+  npmShasum = "7a46e6dfd404dd626f8e47af60f0d23d0c129ffe";
+  nixHash = "sha256-KhmkDWLN2d5O1WzRavpVfSWoBztcqq86ndK+s7Fx08c=";
   dependencyMode = "package-lock";
-  npmDepsHash = "sha256-p9MhfaTHNwwVT28T5gTu0OiQ1wfEblSByarQX8inXHA=";
+  npmDepsHash = "sha256-k42Zjpudds1CzWXrhzfZpyOH31OTyMFyCoNmRx1jR5c=";
   npmPackageLockFile = "memoryLancedb.package-lock.json";
-  npmPackageLockSha256 = "0671d7ac95bb5fb8c67569f6ff27698a570268f75694d358dfb21131604b5bfd";
+  npmPackageLockSha256 = "89e92358d3a9c2e92fb80abe83fa58bbeb62560bf87b4a31a8f74583b0dfedd0";
   npmPackageLockEvidence = {
-    assetName = "openclaw-2026.9.7-dependency-evidence.zip";
-    assetUrl = "https://github.com/openclaw/openclaw/releases/download/v2026.9.7/openclaw-2026.9.7-dependency-evidence.zip";
-    assetNixHash = "sha256-SRsk3iARynvHazCpejAOl45/VBUQMqGG0PJkcaWIRIc=";
+    assetName = "openclaw-2026.9.9-dependency-evidence.zip";
+    assetUrl = "https://github.com/openclaw/openclaw/releases/download/v2026.9.9/openclaw-2026.9.9-dependency-evidence.zip";
+    assetNixHash = "sha256-rpRsMv0BUfZ5zDXTGot8fMWJbsowFmactFBqUmFAOYM=";
     source = "release";
-    sourceSha = "c074824a27c96d3983043f9eeb33823cd1772d8c";
-    generatedAt = "2026-09-29T23:40:32.142Z";
+    sourceSha = "bcfc88812a35243893585dbeca87ca41b48272ca";
+    generatedAt = "2026-10-08T06:32:46.682Z";
   };
   manifestId = "memory-lancedb";
-  openclawCompat = ">=2026.9.7";
-  peerOpenClaw = ">=2026.9.7";
+  openclawCompat = ">=2026.9.9";
+  peerOpenClaw = ">=2026.9.9";
   runtimeExtensions = [
     "./dist/index.js"
   ];
