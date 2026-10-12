@@ -1,4 +1,4 @@
-# Generated from upstream OpenClaw schema at rev bcfc88812a35243893585dbeca87ca41b48272ca. DO NOT EDIT.
+# Generated from upstream OpenClaw schema at rev b8952d477f0c932d8ddc6da5c89cab5a169b6ff1. DO NOT EDIT.
 # Generator: nix/scripts/generate-config-options.ts
 { lib }:
 let
@@ -372,7 +372,7 @@ in
         default = null;
       };
       fastModeDefault = lib.mkOption {
-        type = t.nullOr (t.oneOf [ (t.bool) (t.enum [ "auto" ]) ]);
+        type = t.nullOr (t.oneOf [ (t.bool) (t.enum [ "auto" ]) (t.enum [ "ultrafast" ]) ]);
         default = null;
       };
       heartbeat = lib.mkOption {
@@ -1191,7 +1191,7 @@ in
         default = null;
       };
       fastModeDefault = lib.mkOption {
-        type = t.nullOr (t.oneOf [ (t.bool) (t.enum [ "auto" ]) ]);
+        type = t.nullOr (t.oneOf [ (t.bool) (t.enum [ "auto" ]) (t.enum [ "ultrafast" ]) ]);
         default = null;
       };
       groupChat = lib.mkOption {
@@ -2194,6 +2194,10 @@ in
         };
         github = lib.mkOption {
           type = t.nullOr (t.submodule { options = {
+          allowInSandbox = lib.mkOption {
+            type = t.nullOr (t.bool);
+            default = null;
+          };
           gitAuthor = lib.mkOption {
             type = t.nullOr (t.submodule { options = {
             email = lib.mkOption {
@@ -3591,6 +3595,10 @@ in
       };
       github = lib.mkOption {
         type = t.nullOr (t.submodule { options = {
+        host = lib.mkOption {
+          type = t.nullOr (t.str);
+          default = null;
+        };
         token = lib.mkOption {
           type = t.nullOr (t.oneOf [ (t.str) (t.submodule { options = {
           source = lib.mkOption {
@@ -3625,6 +3633,19 @@ in
     };
     customBindHost = lib.mkOption {
       type = t.nullOr (t.str);
+      default = null;
+    };
+    github = lib.mkOption {
+      type = t.nullOr (t.submodule { options = {
+      apiBaseUrl = lib.mkOption {
+        type = t.nullOr (t.str);
+        default = null;
+      };
+      host = lib.mkOption {
+        type = t.nullOr (t.str);
+        default = null;
+      };
+    }; });
       default = null;
     };
     http = lib.mkOption {
@@ -3878,6 +3899,27 @@ in
     }; });
       default = null;
     };
+    projects = lib.mkOption {
+      type = t.nullOr (t.submodule { options = {
+      defaultRepository = lib.mkOption {
+        type = t.nullOr (t.submodule { options = {
+        ref = lib.mkOption {
+          type = t.nullOr (t.str);
+          default = null;
+        };
+        url = lib.mkOption {
+          type = t.str;
+        };
+      }; });
+        default = null;
+      };
+      nativeGitHubSearch = lib.mkOption {
+        type = t.nullOr (t.bool);
+        default = null;
+      };
+    }; });
+      default = null;
+    };
     publicOrigin = lib.mkOption {
       type = t.nullOr (t.str);
       default = null;
@@ -3991,6 +4033,15 @@ in
     };
     roles = lib.mkOption {
       type = t.nullOr (t.submodule { options = {
+      assignments = lib.mkOption {
+        type = t.nullOr (t.submodule { options = {
+        byGithubLogin = lib.mkOption {
+          type = t.nullOr (t.attrsOf (t.str));
+          default = null;
+        };
+      }; });
+        default = null;
+      };
       default = lib.mkOption {
         type = t.str;
       };
@@ -4920,6 +4971,10 @@ in
       };
       utilityModelSeparation = lib.mkOption {
         type = t.nullOr (t.enum [ true ]);
+        default = null;
+      };
+      webhookListeners = lib.mkOption {
+        type = t.nullOr (t.oneOf [ (t.enum [ true ]) (t.attrsOf (t.listOf (t.listOf (t.str)))) ]);
         default = null;
       };
     }; });
@@ -6699,6 +6754,40 @@ in
         default = null;
       };
     }; });
+      default = null;
+    };
+  }; });
+    default = null;
+  };
+
+  storage = lib.mkOption {
+    type = t.nullOr (t.submodule { options = {
+    locations = lib.mkOption {
+      type = t.nullOr (t.attrsOf (t.submodule { options = {
+      encryption = lib.mkOption {
+        type = t.oneOf [ (t.enum [ "none" ]) (t.submodule { options = {
+        passphrase = lib.mkOption {
+          type = t.oneOf [ (t.str) (t.submodule { options = {
+          source = lib.mkOption {
+            type = t.enum [ "env" "file" "exec" "store" ];
+          };
+          id = lib.mkOption {
+            type = t.str;
+          };
+          provider = lib.mkOption {
+            type = t.str;
+          };
+        }; }) ];
+        };
+      }; }) ];
+      };
+      provider = lib.mkOption {
+        type = t.str;
+      };
+      settings = lib.mkOption {
+        type = t.attrsOf (t.anything);
+      };
+    }; }));
       default = null;
     };
   }; });

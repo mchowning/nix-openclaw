@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.5.12-beta.1";
   expectedIntegrity = "";
   packageName = "@openclaw/amazon-bedrock-provider";
-  version = "2026.9.9";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/amazon-bedrock-provider/-/amazon-bedrock-provider-2026.9.9.tgz";
-  npmIntegrity = "sha512-cIotCP09nh4PpxfClXm6BmfYrSgzLO+FcidEJEmT7G8IzfZVWyo+aeRtQNob3U+kRbujpSk37cXn7FOvVIi67g==";
-  npmShasum = "b3eb042135b7c8d6fbca2db81ef253407d10ef54";
-  nixHash = "sha256-TLQDDHhD3Gr3LHA4EJ/z7oPNT5vjVOh9qFlOWcYhJB4=";
+  version = "2026.10.2";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/amazon-bedrock-provider/-/amazon-bedrock-provider-2026.10.2.tgz";
+  npmIntegrity = "sha512-duvfMbs0K+yxOSbGOxd+P9n4opKroCqpHnVJUevw7DD+EEjJrIlrZIbtRH5/3twSXN1WaXOZ7/uMNGMtwYKKYA==";
+  npmShasum = "892f2a67a21b49aaa03e8c4002d9f98592f60613";
+  nixHash = "sha256-H9avK5UoEyegABGwRlsQHI5ayFNo/H90S8vxPI6t6tg=";
   dependencyMode = "bundled";
   manifestId = "amazon-bedrock";
-  openclawCompat = ">=2026.9.9";
-  peerOpenClaw = ">=2026.9.9";
+  openclawCompat = ">=2026.10.2";
+  peerOpenClaw = ">=2026.10.2";
   runtimeExtensions = [
     "./dist/index.js"
   ];
@@ -37,7 +37,6 @@
     "@aws-sdk/client-bedrock-runtime" = "3.1136.0";
     "@aws-sdk/credential-provider-node" = "3.972.83";
     "@smithy/node-http-handler" = "4.12.1";
-    "@smithy/shared-ini-file-loader" = "4.7.2";
     "@smithy/types" = "4.18.0";
   };
   optionalDependencies = { };
@@ -46,7 +45,6 @@
     "@aws-sdk/client-bedrock-runtime"
     "@aws-sdk/credential-provider-node"
     "@smithy/node-http-handler"
-    "@smithy/shared-ini-file-loader"
     "@smithy/types"
   ];
   bundledPackageRoots = [
@@ -103,9 +101,6 @@
     "node_modules/@smithy/node-http-handler"
     "node_modules/@smithy/node-http-handler/node_modules/@smithy/core"
     "node_modules/@smithy/node-http-handler/node_modules/tslib"
-    "node_modules/@smithy/shared-ini-file-loader"
-    "node_modules/@smithy/shared-ini-file-loader/node_modules/@smithy/core"
-    "node_modules/@smithy/shared-ini-file-loader/node_modules/tslib"
     "node_modules/@smithy/types"
     "node_modules/@smithy/types/node_modules/tslib"
   ];

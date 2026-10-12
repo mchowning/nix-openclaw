@@ -1,6 +1,6 @@
 --- a/src/plugins/discovery.ts
 +++ b/src/plugins/discovery.ts
-@@ -30,5 +30,8 @@
+@@ -34,4 +34,7 @@
  import type { PluginCandidate, PluginDiscoveryResult } from "./discovery.types.js";
 -import { shouldRejectHardlinkedPluginFiles } from "./hardlink-policy.js";
 +import {
@@ -8,7 +8,6 @@
 +  shouldRejectHardlinkedPluginFiles,
 +} from "./hardlink-policy.js";
  import { hashStableJson } from "./installed-plugin-index-hash.js";
- import { readLegacyNpmPluginDeclaration } from "./legacy-npm-declaration.js";
  import type { PluginBundleFormat, PluginDiagnostic, PluginFormat } from "./manifest-types.js";
 @@ -132,6 +135,7 @@
  }
@@ -26,18 +25,10 @@
        typeof stat.uid === "number" &&
        stat.uid !== params.uid &&
        stat.uid !== 0
-@@ -243,6 +250,7 @@
- }
-
- function isUnsafePluginCandidate(params: {
-+  env: NodeJS.ProcessEnv;
-   source: string;
-   rootDir: string;
-   origin: PluginOrigin;
-@@ -828,6 +837,7 @@
-     const resolvedRoot = pluginCacheRealpathSync(params.rootDir) ?? path.resolve(params.rootDir);
-     if (
-       isUnsafePluginCandidate({
+@@ -580,6 +584,7 @@
+     const issue =
+       checkSourceEscapesRoot({ source: resolved, rootDir: resolvedRoot }) ??
+       checkPathStatAndPermissions({
 +        env,
          source: resolved,
          rootDir: resolvedRoot,

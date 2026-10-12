@@ -48,12 +48,11 @@ try {
   });
   vm.runInContext(code, context);
   const params = (rootDir, nix) => ({ rootDir, source: `${rootDir}/index.js`, origin: "config", uid: 1000, ownershipUid: 1000, env: { OPENCLAW_NIX_MODE: nix } });
+  assert.match(discovery, /checkPathStatAndPermissions\(\{\s*env,/);
   const checkCandidate = (input, reason, message) => {
-    assert.equal(context.checkPathStatAndPermissions(input)?.reason ?? null, reason);
-    const diagnostics = [];
-    assert.equal(context.isUnsafePluginCandidate({ ...input, diagnostics }), reason !== null);
-    assert.equal(diagnostics.length, reason === null ? 0 : 1);
-    if (message) assert.match(diagnostics[0].message, message);
+    const issue = context.checkPathStatAndPermissions(input);
+    assert.equal(issue !== null, reason !== null);
+    if (message) assert.match(issue.message, message);
   };
   checkCandidate(params("/nix/store/plugin", "1"), null);
   checkCandidate(params("/nix/store/plugin", "0"), "path_suspicious_ownership", /suspicious ownership/);

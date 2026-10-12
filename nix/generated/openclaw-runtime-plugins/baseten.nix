@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.7.2";
   expectedIntegrity = "";
   packageName = "@openclaw/baseten-provider";
-  version = "2026.9.9";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/baseten-provider/-/baseten-provider-2026.9.9.tgz";
-  npmIntegrity = "sha512-rI/lXTTO/7+YhCXavK5QXF+GiINULuMjYvSu2OUZesD3DLjemLdSyuaQtsowflzn9u7OcvZQUuDn/x58MhpezQ==";
-  npmShasum = "6607a99da0869be1c2badf67c3f2e3f92985c1f3";
-  nixHash = "sha256-dEI2FDshdxXu1hwJ+cLhD/e4lTf2BsG3yr3UnrC8AFc=";
+  version = "2026.10.2";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/baseten-provider/-/baseten-provider-2026.10.2.tgz";
+  npmIntegrity = "sha512-mDUPAh2rEBxgUs/vfQM5pGpJHXWhWsvjZkZ9Y44Tu0TdF4FSTgtG7Y+IjpYTtSFjj8gnUBhOCHNSeEiu7rnmew==";
+  npmShasum = "bda56e252ccaba57d1bf93178ef7958ba5602687";
+  nixHash = "sha256-gcTkDWTRv1YKEFnXfmK0l8ogiGHypZbuPMzML7l6i8A=";
   dependencyMode = "none";
   manifestId = "baseten";
-  openclawCompat = ">=2026.9.9";
-  peerOpenClaw = ">=2026.9.9";
+  openclawCompat = ">=2026.10.2";
+  peerOpenClaw = ">=2026.10.2";
   runtimeExtensions = [
     "./dist/index.js"
   ];

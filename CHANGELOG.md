@@ -6,6 +6,9 @@ Older repository history is available in git.
 
 ## Unreleased
 
+- Package OpenClaw 2026.10.2 with its matching public macOS app, generated configuration and runtime-plugin locks.
+- Refresh the source ownership patch for direct discovery validation while retaining strict application and Nix-only canonical store-path exceptions.
+
 - Package OpenClaw 2026.9.9, the matching public macOS app, and 96 runtime plugins, including the new Slack Huddles catalog entry.
 
 - Package OpenClaw 2026.9.7 with refreshed config and 95 runtime-plugin locks; retain the latest public macOS app, 2026.9.6.
