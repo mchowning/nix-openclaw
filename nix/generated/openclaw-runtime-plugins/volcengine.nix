@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.7.2";
   expectedIntegrity = "";
   packageName = "@openclaw/volcengine-provider";
-  version = "2026.10.2";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/volcengine-provider/-/volcengine-provider-2026.10.2.tgz";
-  npmIntegrity = "sha512-6ba5Aatt7puW7EKP8kiBKHY/Nrxb72/CT4IgrZIAV6gJAMviExgl/9uWyKOD9kRTR0K7a2ldfUsUYmghQKLiBQ==";
-  npmShasum = "f7553ecc37f346eeafcdff120d7b3a54ccff0f99";
-  nixHash = "sha256-SVzre6VdKm8zXPA4Yirb+uhMn3TYaYnIJ0tgPcz/Xtc=";
+  version = "2026.10.5";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/volcengine-provider/-/volcengine-provider-2026.10.5.tgz";
+  npmIntegrity = "sha512-lT9iAALjH0+gxSihOp2VSr+YJ7h5KgwPG+L5YvUsO2qJpxB/peE//NXTt9t+Cnpdcibol+oenif/2HptTAq71g==";
+  npmShasum = "792b996fe4eb18c572558024b66a923c37d5eb67";
+  nixHash = "sha256-6cvq5SzTZJsuPhW8Xaykn3M04XxNbd6zOYR3oeWeUTg=";
   dependencyMode = "none";
   manifestId = "volcengine";
-  openclawCompat = ">=2026.10.2";
-  peerOpenClaw = ">=2026.10.2";
+  openclawCompat = ">=2026.10.5";
+  peerOpenClaw = ">=2026.10.5";
   runtimeExtensions = [
     "./dist/index.js"
   ];

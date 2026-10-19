@@ -6,10 +6,57 @@ import {
   fixture, patch, load, snapshot, change, envFor, paramsFor, restoreEnv, packageFixture, templateDocs,
 } from "./patch-openclaw-npm-dist.fixtures.mjs";
 
-for (const variant of ["js", "mjs", "mjs-optimized-realpath"]) {
+for (const asyncStore of [false, true]) test(`MCP OAuth ${asyncStore ? "async" : "sync"} requires issuer-bound stored credentials`, async (t) => {
+  const f = fixture(t, "mjs");
+  const name = "mcp-oauth-fixture.mjs";
+  fs.writeFileSync(path.join(f.root, "dist", name), `
+let store = {};
+export function setStore(value) { store = value; }
+function readMcpOAuthStore() { return store; }
+async function readStore() { return store; }
+function canReuseStoredTokens() { return true; }
+export async function resolveMcpOAuthAccessToken(params) {
+  const tokens = readMcpOAuthStore().tokens;
+  if (!tokens?.access_token) throw new Error("requires OAuth authorization");
+  return tokens.access_token;
+}
+export function createMcpOAuthClientProvider(params) {
+  const storeKey = "test";
+  return {
+    ${asyncStore ? "async " : ""}clientInformation() {
+      ${asyncStore ? "const store = await readStore();\n\t\t\tconst clientInformation = store.clientInformation;\n\t\t\treturn clientInformation;" : "return readMcpOAuthStore(storeKey).clientInformation;"}
+    },
+    ${asyncStore ? "async " : ""}tokens() {
+\t\t\tif (params.suppressStoredTokens) return;
+\t\t\tconst store = ${asyncStore ? "await readStore()" : "readMcpOAuthStore(storeKey)"};
+      ${asyncStore ? "return canReuseStoredTokens(store) ? store.tokens : void 0;" : "return store.tokens;"}
+    }
+  };
+}
+`);
+  const result = patch(f);
+  assert.equal(result.status, 0, result.stderr);
+  const module = await load(f, name);
+  const provider = module.createMcpOAuthClientProvider({});
+  for (const issuer of [undefined, null, "", 123, "https://auth.example.test"]) {
+    module.setStore({ clientInformation: { issuer }, tokens: { issuer, access_token: "stored" } });
+    assert.equal(Boolean(await provider.clientInformation()), typeof issuer === "string" && issuer.length > 0);
+    assert.equal(Boolean(await provider.tokens()), typeof issuer === "string" && issuer.length > 0);
+    if (typeof issuer === "string" && issuer.length > 0) {
+      assert.equal(await module.resolveMcpOAuthAccessToken({}), "stored");
+    } else {
+      await assert.rejects(module.resolveMcpOAuthAccessToken({}), /requires OAuth/);
+    }
+  }
+  assert.equal(await module.createMcpOAuthClientProvider({ suppressStoredTokens: true }).tokens(), undefined);
+});
+
+for (const variant of ["js", "mjs", "mjs-optimized-realpath", "mjs-cached-native-realpath", "mjs-context-loops"]) {
   const ext = variant === "js" ? "js" : "mjs";
-  const optimizedRealpath = variant === "mjs-optimized-realpath";
-  const fixtureFor = (t) => fixture(t, ext, { optimizedRealpath });
+  const contextLoops = variant === "mjs-context-loops";
+  const cachedNativeRealpath = variant === "mjs-cached-native-realpath" || contextLoops;
+  const optimizedRealpath = variant === "mjs-optimized-realpath" || cachedNativeRealpath;
+  const fixtureFor = (t) => fixture(t, ext, { optimizedRealpath, cachedNativeRealpath, contextLoops });
   test(`${variant}: emitted ownership/policy preserve guards and env boundaries`, async (t) => {
     const f = fixtureFor(t),
       result = patch(f);
@@ -52,26 +99,6 @@ for (const variant of ["js", "mjs", "mjs-optimized-realpath"]) {
     assert.equal(check(params).reason, "path_stat_failed");
     // Existing lexical fallback is retained when realpath fails.
     assert.equal(policy({ ...params, rootDir: "/nix/store/nonexistent" }), false);
-    if (f.packageEntry) {
-      const validatePackageEntry = (await load(f, f.packageEntry)).v;
-      const boundary = await load(f, f.boundary);
-      process.env.OPENCLAW_NIX_MODE = "1";
-      await validatePackageEntry({
-        packageDir: "/nix/store/plugin",
-        entry: "index.js",
-        label: "extension entry",
-        requireExisting: true,
-      });
-      assert.equal(boundary.calls.at(-1).rejectHardlinks, false);
-      process.env.OPENCLAW_NIX_MODE = "0";
-      await validatePackageEntry({
-        packageDir: "/nix/store/plugin",
-        entry: "index.js",
-        label: "extension entry",
-        requireExisting: true,
-      });
-      assert.equal(boundary.calls.at(-1).rejectHardlinks, true);
-    }
   });
   test(`${variant}: real filesystem escapes, permissions and hardlinks stay independent`, async (t) => {
     const f = fixtureFor(t);
@@ -123,7 +150,7 @@ for (const variant of ["js", "mjs", "mjs-optimized-realpath"]) {
     ...(optimizedRealpath ? {
       "unsafe-realpath-helper": ["dependency", "return fs.realpathSync(targetPath);", "return targetPath;"],
       "renamed-realpath-helper": ["dependency", "function resolveRealpath(", "function otherRealpath("],
-      "unchecked-native-realpath": ["dependency", "fs.realpathSync.native(targetPath) === targetPath", "true"],
+      "unchecked-native-realpath": ["dependency", `${cachedNativeRealpath ? "pluginCacheRealpathSync(targetPath, true)" : "fs.realpathSync.native(targetPath)"} === targetPath`, "true"],
     } : {}),
     "wrong-binding": ["discovery", "{ t as shouldReject", "{ x as shouldReject"],
     "comment-binding": ["discovery", "import { t as shouldReject", "// import { t as shouldReject"],
@@ -135,19 +162,12 @@ for (const variant of ["js", "mjs", "mjs-optimized-realpath"]) {
     "env-contract": ["environment", '=== "1"', '!== "0"'],
     "late-loop": ["install", "HealthIssues", "UnrecognizedHealth"],
     "mixed-patched": ["install", "\tfor (const candidate", "\tif (true) for (const candidate"],
-    ...(ext === "mjs"
-      ? {
-          "entry-boundary": [
-            "packageEntry",
-            "const opened = await openRootFile({",
-            "const opened = await openRootFileChanged({",
-          ],
-        }
-      : {}),
+    ...(contextLoops ? {
+      "wrong-context": ["install", "installContext.collectInstallCandidates(nextRecords", "context.collectInstallCandidates(nextRecords"],
+      "wrong-records": ["install", "context.collectInstallCandidates(records", "context.collectInstallCandidates(nextRecords"],
+    } : {}),
   };
-  const missing = ["policy", "discovery", "install", ...(ext === "mjs" ? ["packageEntry"] : [])].flatMap(
-    (role) => [`missing-${role}`, `duplicate-${role}`],
-  );
+  const missing = ["policy", "discovery", "install"].flatMap((role) => [`missing-${role}`, `duplicate-${role}`]);
   const ownerFaults = [...missing, ...Object.keys(mutations), "co-located"];
   for (const fault of [...ownerFaults, "nested-only", "symlink-only", "directory-only"]) {
     test(`${variant}: rejects ${fault} before any write`, (t) => {

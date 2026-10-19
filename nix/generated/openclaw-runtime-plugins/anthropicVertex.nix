@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.5.12-beta.1";
   expectedIntegrity = "";
   packageName = "@openclaw/anthropic-vertex-provider";
-  version = "2026.10.2";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/anthropic-vertex-provider/-/anthropic-vertex-provider-2026.10.2.tgz";
-  npmIntegrity = "sha512-KNBQKEwPlxhIF/OQwmY9hDvpxO96TUycimLh+DEMMbNqJuKoCzCeq4z5/kFgb0J8FuziU1f0vhacE2ZqQxAIuw==";
-  npmShasum = "c45a8520e50a941d44d7f5bb65d9b22c18a0e952";
-  nixHash = "sha256-YR68ynBjxBBDwuHg4NoCC/So3Z4VnQTTmXWVIPg3vqs=";
+  version = "2026.10.5";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/anthropic-vertex-provider/-/anthropic-vertex-provider-2026.10.5.tgz";
+  npmIntegrity = "sha512-ONVdFovHolm+LsuCDXytxl4MtdFL8dT/R7vjTxWZHxwTS8NzcvWBhcueJcbNwQ65KX8dXLOnNEdljdnX4DTnPw==";
+  npmShasum = "bd3a7b72156e1beaf5a335f784696dd19fce4926";
+  nixHash = "sha256-1zXPAQbRI54qfFsI01XkhRSiv/pEt1Qp2hyes00jkUE=";
   dependencyMode = "bundled";
   manifestId = "anthropic-vertex";
-  openclawCompat = ">=2026.10.2";
-  peerOpenClaw = ">=2026.10.2";
+  openclawCompat = ">=2026.10.5";
+  peerOpenClaw = ">=2026.10.5";
   runtimeExtensions = [
     "./dist/index.js"
   ];
@@ -29,7 +29,7 @@
   channels = [ ];
   contracts = { };
   dependencies = {
-    "@anthropic-ai/vertex-sdk" = "0.19.10";
+    "@anthropic-ai/vertex-sdk" = "0.20.2";
     google-auth-library = "11.1.0";
     undici = "8.11.2";
   };

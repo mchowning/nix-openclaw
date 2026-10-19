@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.7.2";
   expectedIntegrity = "";
   packageName = "@openclaw/voyage-provider";
-  version = "2026.10.2";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/voyage-provider/-/voyage-provider-2026.10.2.tgz";
-  npmIntegrity = "sha512-CmmzQRokh7qugpHHWe6HQjfPB9T3S36Mne+r0Hz4NygwEjl3fBXHq7ndXZ9QOjHXkhXRpl2FB4HLdtIyOyfm6w==";
-  npmShasum = "fe1219fe4536cabefa3c8624bd274bc45cd125a8";
-  nixHash = "sha256-7NwmGGJuFlh8DrYae15xxACci/OLD4p2vxKpRzaeNTw=";
+  version = "2026.10.5";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/voyage-provider/-/voyage-provider-2026.10.5.tgz";
+  npmIntegrity = "sha512-o96LswE0GbZnFTfTVusok05H08KdChTN0USaIWYCUMvtnBty9gFektR4SMajFcf0OJXoqmrXrkhjRzKRu+J/wg==";
+  npmShasum = "9b7d34bedf79fa389475067ad738ef1b99a14c59";
+  nixHash = "sha256-8ZOkQ9YVk6q3kJ7TR1CmC0+Bng7DLwr/Hfzd7pnly8w=";
   dependencyMode = "none";
   manifestId = "voyage";
-  openclawCompat = ">=2026.10.2";
-  peerOpenClaw = ">=2026.10.2";
+  openclawCompat = ">=2026.10.5";
+  peerOpenClaw = ">=2026.10.5";
   runtimeExtensions = [
     "./dist/index.js"
   ];

@@ -46,6 +46,15 @@ if (packageJson.files.includes("src/agents/templates/")) {
   fs.accessSync(path.join(root, "src/agents/templates/HEARTBEAT.md"));
 }
 const npmModules = path.join(process.env.OPENCLAW_GATEWAY, "lib/node_modules");
+if (fs.existsSync(npmModules)) {
+  for (const directory of [npmModules, path.join(root, "node_modules")]) {
+    for (const relative of ["npm", ".bin/npm", ".bin/npx"]) {
+      if (fs.lstatSync(path.join(directory, relative), { throwIfNoEntry: false })) {
+        throw new Error(`Unused bundled npm runtime remains: ${path.join(directory, relative)}`);
+      }
+    }
+  }
+}
 const modules = fs.existsSync(npmModules) ? npmModules : path.join(root, "node_modules");
 if (fs.existsSync(modules)) {
   for (const file of fs.readdirSync(modules, { recursive: true })) {
@@ -57,8 +66,7 @@ if (fs.existsSync(modules)) {
 }
 const dist = path.join(root, "dist");
 const loaders = fs.readdirSync(dist, { withFileTypes: true })
-  .filter((entry) => entry.isFile() && /\.m?js$/.test(entry.name)
-    && entry.name !== "package-update-activation-recovery.mjs")
+  .filter((entry) => entry.isFile() && /\.m?js$/.test(entry.name))
   .map((entry) => path.join(dist, entry.name))
   .filter((file) => fs.readFileSync(file, "utf8").includes("function loadBundledPluginPublicArtifactModuleSync"));
 if (loaders.length !== 1) {
@@ -139,3 +147,13 @@ if ! find "${root}/skills" -name SKILL.md -type f | grep -q .; then
 fi
 
 echo "openclaw package contents: ok"
+
+if [ -n "${OPENCLAW_MCP_OAUTH_CHECK:-}" ]; then
+  OPENCLAW_PACKAGE_ROOT="$root" node "$OPENCLAW_MCP_OAUTH_CHECK"
+fi
+if [ -n "${OPENCLAW_MCP_OAUTH_FLOW_CHECK:-}" ]; then
+  OPENCLAW_PACKAGE_ROOT="$root" node "$OPENCLAW_MCP_OAUTH_FLOW_CHECK"
+fi
+if [ -n "${OPENCLAW_CONTROL_UI_CHECK:-}" ]; then
+  OPENCLAW_PACKAGE_ROOT="$root" node "$OPENCLAW_CONTROL_UI_CHECK"
+fi

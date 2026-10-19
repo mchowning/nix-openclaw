@@ -6,13 +6,15 @@ Older repository history is available in git.
 
 ## Unreleased
 
-- Package OpenClaw 2026.10.2 with its matching public macOS app, generated configuration and runtime-plugin locks.
-- Refresh the source ownership patch for direct discovery validation while retaining strict application and Nix-only canonical store-path exceptions.
+- Package OpenClaw 2026.10.5 and matching runtime plugins; refresh generated configuration options and the source-patch contract for its renamed asset-count limit. The macOS app remains on 2026.10.4.
+- Restore stable-pin packaging for OpenClaw 2026.10.5's shared plugin-install context while preserving Nix-mode candidate install suppression.
+- Move macOS CI and stable-pin validation to the Apple Silicon Xcode 27 image while preserving Nix-owned SDK targets.
+- Preserve the upstream macOS app's signed contents by disabling Nix fixups; verify installed bytes, symlinks, signatures, and universal architectures in CI. Thanks @vincentkoc (#160).
+- Omit the unused upstream npm CLI and its vulnerable private dependencies from the Nix gateway; retain the pinned build-time package managers and declarative plugin installation.
 
-- Package OpenClaw 2026.9.9, the matching public macOS app, and 96 runtime plugins, including the new Slack Huddles catalog entry.
-
-- Package OpenClaw 2026.9.7 with refreshed config and 95 runtime-plugin locks; retain the latest public macOS app, 2026.9.6.
-- Correct the known ACPX 2026.9.7 manifest mismatch only in the build copy, preserve published dependency evidence, and adapt strict source/dist checks to the new discovery flow and standalone recovery worker.
+- Restore stable-pin packaging for OpenClaw 2026.10.4's relocated realpath cache, direct discovery checks, and asynchronous OAuth store, preserving path, ownership, and saved-credential issuer checks.
+- Fix CVE-2026-104850 in the stable npm gateway with MCP SDK 1.31.0 and require login again for saved OAuth credentials without an issuer; thanks @SebTardif (#163).
+- Load hardlinked Control UI plugin assets and reload their manifests from canonical Nix-store roots in Nix mode, preserving rejection for mutable paths; thanks @paulcam206 (#165).
 
 - Refresh Nixpkgs, Home Manager, bundled OpenClaw tools and example-plugin inputs, and update the private pnpm 11 runtime to 11.27.0.
 - Refresh Nix inputs and the example plugin lock, and update private source-build pnpm runtimes to 11.27.1 and 12.6.0.

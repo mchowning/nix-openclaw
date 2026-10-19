@@ -10,7 +10,9 @@ const checker = path.join(import.meta.dirname, "check-package-contents.sh");
 // Reduced executable boundaries from npm 2026.7.1-2 (0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c)
 // and 2026.9.3 (1391f7cd2d40ab5bbcf2f5f831d3a64f520e72d7). Policy/env bodies are unchanged.
 // The optional canonical-realpath helper is emitted by npm 2026.9.5 (ec9c1a13db8938e5a3eaa51fca2e981cde2395a9).
-function fixture(t, ext, { optimizedRealpath = false } = {}) {
+// npm 2026.10.4 moves the cache into package-manifest and caches native realpaths too.
+// npm 2026.10.5 selects install candidates through a shared context.
+function fixture(t, ext, { optimizedRealpath = false, cachedNativeRealpath = false, contextLoops = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-dist-patch-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const dist = path.join(root, "dist");
@@ -20,7 +22,7 @@ function fixture(t, ext, { optimizedRealpath = false } = {}) {
   const cacheArg = old ? ", realpathCache" : "";
   const paramsCache = old ? ", params.realpathCache" : "";
   const realpath = old ? "safeRealpathSync" : "pluginCacheRealpathSync";
-  const dependency = `${old ? "path" : "plugin-cache-files"}-fixture.${ext}`;
+  const dependency = `${old ? "path" : cachedNativeRealpath ? "package-manifest" : "plugin-cache-files"}-fixture.${ext}`;
   put(
     `paths-fixture.${ext}`,
     `function resolveIsNixMode(env = process.env) {
@@ -51,7 +53,11 @@ function pathFacts(targetPath) {
 \t}
 \treturn facts;
 }
-${optimizedRealpath ? `function resolveRealpath(targetPath) {
+${cachedNativeRealpath ? `function resolveRealpath(targetPath) {
+\tif (path.resolve(targetPath) === targetPath && pluginCacheRealpathSync(targetPath, true) === targetPath) return targetPath;
+\treturn fs.realpathSync(targetPath);
+}
+` : optimizedRealpath ? `function resolveRealpath(targetPath) {
 \tconst absolute = path.resolve(targetPath);
 \ttry {
 \t\tif (absolute === targetPath && fs.realpathSync.native(targetPath) === targetPath) return targetPath;
@@ -110,55 +116,6 @@ function shouldRejectHardlinkedPluginFiles(params) {
 export { shouldRejectHardlinkedPluginFiles as t };
 `,
   );
-  const packageEntry = old ? null : `package-entry-resolution-fixture.${ext}`;
-  const boundary = old ? null : `boundary-file-read-fixture.${ext}`;
-  if (!old) {
-    put(
-      boundary,
-      `import fs from "node:fs";
-export const calls = [];
-async function openRootFile(params) {
-\tcalls.push(params);
-\treturn { ok: true, fd: fs.openSync("/dev/null", "r") };
-}
-function matchRootFileOpenFailure() { throw new Error("unexpected open failure"); }
-export { openRootFile as a, matchRootFileOpenFailure as i };
-`,
-    );
-    put(
-      `boundary-path-fixture.${ext}`,
-      `async function resolveRootPath() { return { exists: true }; }
-export { resolveRootPath as i };
-`,
-    );
-    put(
-      packageEntry,
-      `import { i as resolveRootPath } from "./boundary-path-fixture.${ext}";
-import { a as openRootFile, i as matchRootFileOpenFailure } from "./${boundary}";
-import fs from "node:fs";
-import path from "node:path";
-async function validatePackageExtensionEntry(params) {
-\tconst absolutePath = path.resolve(params.packageDir, params.entry);
-\ttry {
-\t\tif (!(await resolveRootPath({
-\t\t\tabsolutePath,
-\t\t\trootPath: params.packageDir,
-\t\t\tboundaryLabel: "plugin package directory"
-\t\t})).exists) return params.requireExisting ? { ok: false } : { ok: true, exists: false };
-\t} catch { return { ok: false }; }
-\tconst opened = await openRootFile({
-\t\tabsolutePath,
-\t\trootPath: params.packageDir,
-\t\tboundaryLabel: "plugin package directory"
-\t});
-\tif (!opened.ok) return matchRootFileOpenFailure(opened, { fallback: () => ({ ok: false }) });
-\tfs.closeSync(opened.fd);
-\treturn { ok: true, exists: true };
-}
-export { validatePackageExtensionEntry as v };
-`,
-    );
-  }
   const discovery = `discovery-fixture.${ext}`;
   put(
     discovery,
@@ -216,20 +173,20 @@ ${loop} ids.push(candidate.id);
     : ""
 }async function detectConfiguredPluginInstallHealthIssues(params) {
 \tconst env = params.env ?? process.env, issues = [];
-${loop} issues.push(candidate.id);
+${contextLoops ? '\tconst context = { collectInstallCandidates: () => collectDownloadableInstallCandidates({ cfg: params.cfg, env }) };\n\tconst records = {}, deferredPluginIds = new Set();\n\tfor (const candidate of context.collectInstallCandidates(records, deferredPluginIds))' : loop} issues.push(candidate.id);
 \treturn issues;
 }
 async function ${old ? "repairMissingPluginInstalls" : "repairMissingPluginInstallsWithLease"}(params) {
 \tconst env = params.env ?? process.env;
 \tif (params.recorded) effects.push("recorded-update");
-${loop} effects.push(candidate.id);
+${contextLoops ? '\tconst installContext = { collectInstallCandidates: () => collectDownloadableInstallCandidates({ cfg: params.cfg, env }) };\n\tconst nextRecords = {}, deferredPluginIds = new Set();\n\tfor (const candidate of installContext.collectInstallCandidates(nextRecords, deferredPluginIds))' : loop} effects.push(candidate.id);
 \treturn 'Failed to install missing configured plugin "';
 }
 export { detectConfiguredPluginInstallHealthIssues as health, ${old ? "repairMissingPluginInstalls" : "repairMissingPluginInstallsWithLease"} as repair };
 `,
   );
   fs.writeFileSync(path.join(root, "package.json"), '{"type":"module"}');
-  return { root, dist, put, policy, discovery, install, dependency, packageEntry, boundary };
+  return { root, dist, put, policy, discovery, install, dependency };
 }
 const run = (command, args, env) =>
   spawnSync(command, args, {

@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.6.8";
   expectedIntegrity = "";
   packageName = "@openclaw/chutes-provider";
-  version = "2026.10.2";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/chutes-provider/-/chutes-provider-2026.10.2.tgz";
-  npmIntegrity = "sha512-Yv4t3CCP4bSnsMvDDZltvjJlvYVhthvb1odkvOD+gAFEir7jWeS08SSBmiFKO/EHLqBmjpZjdtsOsY+PBcHQFg==";
-  npmShasum = "ffa6e4c3f186212f72efb9b26e902d2edb428d53";
-  nixHash = "sha256-z8H+IkWFN4Lz75kh4gR65S/H/RbmtYhRgANgZpK+1Cs=";
+  version = "2026.10.5";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/chutes-provider/-/chutes-provider-2026.10.5.tgz";
+  npmIntegrity = "sha512-5E1lZwEd9vb/q4SvjMl+WhwjgUUzxKqbhHWIwxeCP+OStSeH5nKw3/53hqtf0KVSyTxed6EMLdjqGNfyre1dag==";
+  npmShasum = "34caa0d4bfa273d04b96bd6bf8437fee87078e05";
+  nixHash = "sha256-kcSknbgLjjysXjGVD7yZqJDlxKdTYggsvJntoFAew1E=";
   dependencyMode = "none";
   manifestId = "chutes";
-  openclawCompat = ">=2026.10.2";
-  peerOpenClaw = ">=2026.10.2";
+  openclawCompat = ">=2026.10.5";
+  peerOpenClaw = ">=2026.10.5";
   runtimeExtensions = [
     "./dist/index.js"
   ];

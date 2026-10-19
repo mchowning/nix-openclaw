@@ -70,6 +70,10 @@ You talk to Telegram, your machine does things.
 
 ## OpenClaw Runtime Plugins
 
+Plugin Control UI assets and manifest reloads support Nix-store hardlinks when
+running in Nix mode, including stores optimized with `auto-optimise-store`.
+Mutable plugin roots retain the upstream hardlink restrictions.
+
 OpenClaw runtime plugins are JavaScript plugin roots loaded by the OpenClaw
 Gateway. They are the plugins described in the upstream
 [OpenClaw plugin docs](https://docs.openclaw.ai/tools/plugin): Discord, Slack,
@@ -93,6 +97,8 @@ With nix-openclaw, plugin code is installed by Nix:
 ```nix
 programs.openclaw.runtimePlugins = [ "discord" ];
 ```
+
+The Nix gateway omits the unused upstream npm CLI and its private dependency bundle. Build-time package managers come from the pinned Nix toolchain.
 
 OpenClaw runs with `OPENCLAW_NIX_MODE=1`, so `openclaw plugins install`,
 `openclaw plugins update`, `openclaw plugins uninstall`,
@@ -987,6 +993,18 @@ Plugins are keyed by their declared `name`. If two plugins declare the same name
 
 ## Packaging & Updates
 
+### MCP OAuth credentials after upgrading
+
+The stable npm gateway packages MCP SDK 1.31.0 to fix
+[CVE-2026-104850](https://github.com/advisories/GHSA-6qxp-vccf-f47h).
+Saved OAuth clients and tokens must identify their authorization server. Older
+credentials without that issuer are ignored; run `openclaw mcp logout <name>`
+and `openclaw mcp login <name>` for each affected HTTP MCP server. Complete the
+login only for servers you trust. If credentials may already have been exposed,
+revoke the tokens and rotate the client secret at the authorization server.
+Explicit source overrides use their upstream dependency locks and must include
+the corresponding SDK fix themselves.
+
 **Goal:** `nix-openclaw` is a great Nix package. Automation, promotion, and fleet rollout live elsewhere.
 
 ### Stable release mirroring
@@ -998,6 +1016,8 @@ The gateway tracks the newest upstream stable OpenClaw source release that satis
 - gateway starts and answers local health checks
 
 The macOS app is pinned separately to the newest stable public `OpenClaw-*.zip` artifact. If upstream has not promoted desktop assets for the latest source release yet, `openclaw-app` may lag; that must not block Linux users or macOS gateway users from getting the latest packaged OpenClaw gateway.
+
+The macOS package preserves the signed upstream app bundle without rewriting its contents. CI compares installed bytes and symlinks with the pinned archive and verifies the signature and universal executable architectures.
 
 The Nix gate is deliberately package-focused. It does not make the full upstream Vitest suite a hard promotion gate; upstream owns source test health, while `nix-openclaw` verifies the npm-shrinkwrapped gateway package, package contents, smoke startup, module activation, generated config materialization during pin updates, and newest available macOS app artifact.
 

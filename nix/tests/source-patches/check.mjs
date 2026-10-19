@@ -8,37 +8,49 @@ import vm from "node:vm";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-source-patch-"));
 try {
-  fs.mkdirSync(path.join(root, "src/plugins"), { recursive: true });
-  for (const name of ["discovery.ts", "hardlink-policy.ts", "package-entry-resolution.ts"]) {
-    fs.writeFileSync(path.join(root, "src/plugins", name), fs.readFileSync(path.join(process.env.OPENCLAW_SOURCE, "src/plugins", name)));
+  for (const name of ["plugins/discovery.ts", "plugins/hardlink-policy.ts", "plugins/control-ui-assets.ts", "gateway/control-ui-plugin-assets.ts"]) {
+    const target = path.join(root, "src", name);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, fs.readFileSync(path.join(process.env.OPENCLAW_SOURCE, "src", name)));
   }
   const discoveryPath = path.join(root, "src/plugins/discovery.ts");
   const originalDiscovery = fs.readFileSync(discoveryPath, "utf8");
+  const legacyDiscovery = originalDiscovery.includes("function findCandidateBlockIssue(");
+  const ownershipPatch = legacyDiscovery ? process.env.OWNERSHIP_PATCH : process.env.OWNERSHIP_DIRECT_PATCH;
   const availabilityImport = 'import { inspectPluginLoadPath, pluginPathFailureDiagnostic } from "./discovery-availability.js";\n';
   const beforeAvailabilityImport = originalDiscovery.replace(availabilityImport, "");
-  for (const addedImport of ["", availabilityImport]) {
-    fs.writeFileSync(discoveryPath, beforeAvailabilityImport.replace(
+  const variants = legacyDiscovery ? ["", availabilityImport].map((addedImport) => beforeAvailabilityImport.replace(
       'import type { PluginCandidate, PluginDiscoveryResult }',
       `${addedImport}import type { PluginCandidate, PluginDiscoveryResult }`,
-    ));
-    const probe = spawnSync("patch", ["--dry-run", "--batch", "--fuzz=0", "-p1", "-i", process.env.OWNERSHIP_PATCH], { cwd: root, encoding: "utf8" });
+    )) : [originalDiscovery];
+  for (const variant of variants) {
+    fs.writeFileSync(discoveryPath, variant);
+    const probe = spawnSync("patch", ["--dry-run", "--batch", "--fuzz=0", "-p1", "-i", ownershipPatch], { cwd: root, encoding: "utf8" });
     assert.equal(probe.status, 0, probe.stdout + probe.stderr);
   }
   fs.writeFileSync(discoveryPath, originalDiscovery);
-  const patched = spawnSync("patch", ["--batch", "--fuzz=0", "-p1", "-i", process.env.OWNERSHIP_PATCH], { cwd: root, encoding: "utf8" });
+  const patched = spawnSync("patch", ["--batch", "--fuzz=0", "-p1", "-i", ownershipPatch], { cwd: root, encoding: "utf8" });
   assert.equal(patched.status, 0, patched.stdout + patched.stderr);
   let policy = fs.readFileSync(path.join(root, "src/plugins/hardlink-policy.ts"), "utf8");
   policy = policy.replace(/^import .*;\n/gm, "").replaceAll("export function", "function");
   const discovery = fs.readFileSync(path.join(root, "src/plugins/discovery.ts"), "utf8");
-  const start = discovery.indexOf("function checkPathStatAndPermissions(");
-  const end = discovery.indexOf("function isExtensionFile(", start);
-  assert.ok(start >= 0 && end > start);
-  const code = stripTypeScriptTypes(policy + discovery.slice(start, end));
+  const permissions = discovery.match(/^function checkPathStatAndPermissions\([\s\S]*?^\}$/m)?.[0];
+  const candidate = legacyDiscovery
+    ? discovery.match(/^function findCandidateBlockIssue\([\s\S]*?^\}$/m)?.[0]
+    : `function findCandidateBlockIssue(params) {
+        const resolved = params.source, resolvedRoot = params.rootDir;
+        const ownershipUid = params.ownershipUid, env = params.env;
+        return ${discovery.match(/const issue =\s*([\s\S]*?);\n/)?.[1]};
+      }`;
+  assert.ok(permissions && candidate, "expected source ownership checks");
+  const code = stripTypeScriptTypes([policy, permissions, candidate].join("\n"));
   let stat = { mode: 0o555, uid: 30001 };
   const realpaths = new Map();
+  const testEnv = {};
+  let assetOptions;
   const context = vm.createContext({
-    path, process: { platform: "linux" },
-    resolveIsNixMode: (env) => env?.OPENCLAW_NIX_MODE === "1",
+    path, Buffer, process: { platform: "linux", env: testEnv },
+    resolveIsNixMode: (env = testEnv) => env.OPENCLAW_NIX_MODE === "1",
     pluginCacheRealpathSync: (file) => realpaths.get(file) ?? file,
     pluginCacheStatSync: () => stat,
     currentUid: (uid) => uid,
@@ -48,54 +60,49 @@ try {
   });
   vm.runInContext(code, context);
   const params = (rootDir, nix) => ({ rootDir, source: `${rootDir}/index.js`, origin: "config", uid: 1000, ownershipUid: 1000, env: { OPENCLAW_NIX_MODE: nix } });
-  assert.match(discovery, /checkPathStatAndPermissions\(\{\s*env,/);
-  const checkCandidate = (input, reason, message) => {
-    const issue = context.checkPathStatAndPermissions(input);
-    assert.equal(issue !== null, reason !== null);
-    if (message) assert.match(issue.message, message);
+  const issueText = (params) => {
+    const issue = context.findCandidateBlockIssue(params);
+    return issue.reason ?? issue.message;
   };
-  checkCandidate(params("/nix/store/plugin", "1"), null);
-  checkCandidate(params("/nix/store/plugin", "0"), "path_suspicious_ownership", /suspicious ownership/);
-  checkCandidate(params("/tmp/plugin", "1"), "path_suspicious_ownership", /suspicious ownership/);
-  checkCandidate(params("/nix/store-other/plugin", "1"), "path_suspicious_ownership", /suspicious ownership/);
+  assert.equal(context.findCandidateBlockIssue(params("/nix/store/plugin", "1")), null);
+  assert.match(issueText(params("/nix/store/plugin", "0")), /path_suspicious_ownership|suspicious ownership/);
+  assert.match(issueText(params("/tmp/plugin", "1")), /path_suspicious_ownership|suspicious ownership/);
+  assert.match(issueText(params("/nix/store-other/plugin", "1")), /path_suspicious_ownership|suspicious ownership/);
   realpaths.set("/nix/store/escaped", "/tmp/plugin");
-  checkCandidate(params("/nix/store/escaped", "1"), "path_suspicious_ownership", /suspicious ownership/);
+  assert.match(issueText(params("/nix/store/escaped", "1")), /path_suspicious_ownership|suspicious ownership/);
   stat = { mode: 0o777, uid: 30001 };
-  checkCandidate(params("/nix/store/plugin", "1"), "path_world_writable", /world-writable/);
+  assert.match(issueText(params("/nix/store/plugin", "1")), /path_world_writable|world-writable path/);
   stat = null;
-  checkCandidate(params("/nix/store/plugin", "1"), "path_stat_failed", /cannot stat/);
+  assert.match(issueText(params("/nix/store/plugin", "1")), /path_stat_failed|cannot stat path/);
   assert.equal(context.shouldRejectHardlinkedPluginFiles(params("/nix/store/plugin", "1")), false);
   assert.equal(context.shouldRejectHardlinkedPluginFiles(params("/tmp/plugin", "1")), true);
-
-  const packageEntries = fs.readFileSync(path.join(root, "src/plugins/package-entry-resolution.ts"), "utf8");
-  const entryStart = packageEntries.indexOf("async function validatePackageExtensionEntry(");
-  const entryEnd = packageEntries.indexOf("async function validatePackageEntryForInstall(", entryStart);
-  assert.ok(entryStart >= 0 && entryEnd > entryStart);
-  vm.runInContext(stripTypeScriptTypes(packageEntries.slice(entryStart, entryEnd)), context);
-  let openParams;
-  context.resolveRootPath = async () => ({ exists: true });
-  context.fs.closeSync = () => {};
-  context.openRootFile = async (input) => {
-    openParams = input;
-    return { ok: true, fd: 1 };
+  const assetsSource = fs.readFileSync(path.join(root, "src/plugins/control-ui-assets.ts"), "utf8");
+  context.CONTROL_UI_PLUGIN_MAX_ASSET_BYTES = 4 * 1024 * 1024;
+  context.CONTROL_UI_PLUGIN_MAX_BUILD_BYTES = 8 * 1024 * 1024;
+  context.CONTROL_UI_PLUGIN_MAX_ASSETS = 128;
+  context.root = async (rootDir, options) => {
+    assetOptions = options;
+    return { rootReal: rootDir, readBytes: async () => Buffer.from("test") };
   };
-  context.matchRootFileOpenFailure = () => assert.fail("successful fixture must not inspect failure");
-  context.process.env = { OPENCLAW_NIX_MODE: "1" };
-  await context.validatePackageExtensionEntry({
-    packageDir: "/nix/store/plugin",
-    entry: "index.js",
-    label: "extension entry",
-    requireExisting: true,
-  });
-  assert.equal(openParams.rejectHardlinks, false);
-  context.process.env = { OPENCLAW_NIX_MODE: "0" };
-  await context.validatePackageExtensionEntry({
-    packageDir: "/nix/store/plugin",
-    entry: "index.js",
-    label: "extension entry",
-    requireExisting: true,
-  });
-  assert.equal(openParams.rejectHardlinks, true);
+  context.walkRootDirectory = async function* () { yield { kind: "file", relativePath: "ui/index.js" }; };
+  const assetPath = assetsSource.match(/^export function isPluginControlUiAssetPath\([\s\S]*?^\}$/m)?.[0];
+  if (assetPath) vm.runInContext(stripTypeScriptTypes(assetPath.replace("export function", "function")), context);
+  vm.runInContext(stripTypeScriptTypes(assetsSource.slice(assetsSource.indexOf("export async function")).replace("export async function", "async function")), context);
+  const reloadSource = fs.readFileSync(path.join(root, "src/gateway/control-ui-plugin-assets.ts"), "utf8");
+  const reloadCall = reloadSource.match(/loadPluginManifest\(\n[\s\S]*?\n          \)/)?.[0];
+  assert.ok(reloadCall, "expected patched manifest reload call");
+  context.loadPluginManifest = (_rootDir, rejectHardlinks) => rejectHardlinks;
+  vm.runInContext(stripTypeScriptTypes(`function reload(record: { rootDir: string }) { return ${reloadCall}; }`), context);
+  for (const rootDir of ["/nix/store/plugin", "/tmp/plugin", "/nix/store/escaped"]) {
+    for (const mode of ["1", "0"]) {
+      testEnv.OPENCLAW_NIX_MODE = mode;
+      const allow = rootDir === "/nix/store/plugin" && mode === "1";
+      await context.readPluginControlUiAssets(rootDir, { entry: "ui/index.js" });
+      assert.equal(assetOptions.hardlinks, allow ? "allow" : "reject");
+      assert.equal(assetOptions.symlinks, "reject");
+      assert.equal(context.reload({ rootDir }), !allow);
+    }
+  }
   console.log("pinned source patch application, caller environment, ownership and path guards: PASS");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
