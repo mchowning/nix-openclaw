@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.6.11";
   expectedIntegrity = "";
   packageName = "@openclaw/mxc-sandbox";
-  version = "2026.10.5";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/mxc-sandbox/-/mxc-sandbox-2026.10.5.tgz";
-  npmIntegrity = "sha512-yz49ojbbyEQVCf0qbmQeM/dkYqFWqBp4Hp5SdYTUUM1IK03c/QjV0VE/OtPmJC3aDBypS3Q1ZAePhbhTu9Cpxg==";
-  npmShasum = "9253e4786e065ad005cf63f2a378a6e57bbe9fff";
-  nixHash = "sha256-vgQxASeVuD+n8/bj3BSkuXXYbw2P2QYnGiDjEI3smXE=";
+  version = "2026.10.7";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/mxc-sandbox/-/mxc-sandbox-2026.10.7.tgz";
+  npmIntegrity = "sha512-9MBtY+FSvWuW4TxvqQ0Qj6XVDse4ZySpUMrIoRSNWh0jtgBHx0pgBArptkp2VAtdeUp8MAZSKYz4+wL1YZLZyw==";
+  npmShasum = "4ee03aaaa04b817ba5f36348213870724ba327c6";
+  nixHash = "sha256-qE2ahBxoW6yvYSSIJewOFogB1uMZqSzYm4SpWjeUMWY=";
   dependencyMode = "bundled";
   manifestId = "mxc";
-  openclawCompat = ">=2026.10.5";
-  peerOpenClaw = ">=2026.10.5";
+  openclawCompat = ">=2026.10.7";
+  peerOpenClaw = ">=2026.10.7";
   runtimeExtensions = [
     "./dist/index.js"
   ];

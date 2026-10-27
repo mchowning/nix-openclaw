@@ -13,15 +13,15 @@
   minHostVersion = ">=2026.4.10";
   expectedIntegrity = "";
   packageName = "@openclaw/brave-plugin";
-  version = "2026.10.5";
-  tarballUrl = "https://registry.npmjs.org/@openclaw/brave-plugin/-/brave-plugin-2026.10.5.tgz";
-  npmIntegrity = "sha512-Dys0g/nhJXTpqmxwujnE9UoSN1EVszHWqbI5C3aNNk0zMqFUcD/YMT7TACe65aiVANHGuiMpLDm6rtJO5qq8FA==";
-  npmShasum = "38cabc95110824eb0c9cf3ad88113009738dcae2";
-  nixHash = "sha256-0zYx55+WWKDnvrFOUgGLw/LqML0ZFNjIvGMXQhXzv2k=";
+  version = "2026.10.7";
+  tarballUrl = "https://registry.npmjs.org/@openclaw/brave-plugin/-/brave-plugin-2026.10.7.tgz";
+  npmIntegrity = "sha512-KCgODMIfkVA9v/khI0t1ZMdN2LUWNV+O5IGMhouLVRBGeNZbv0M9eRcdCoWFxoqpeLZzegQy6UZFtCTK6HLc9A==";
+  npmShasum = "1256dd433bb676805f035103ba252690f04b4651";
+  nixHash = "sha256-v6CrsfNvD7SymLZEQekJL3xFCl/2sYm9CHzzYCvf8qI=";
   dependencyMode = "none";
   manifestId = "brave";
-  openclawCompat = ">=2026.10.5";
-  peerOpenClaw = ">=2026.10.5";
+  openclawCompat = ">=2026.10.7";
+  peerOpenClaw = ">=2026.10.7";
   runtimeExtensions = [
     "./dist/index.js"
   ];
