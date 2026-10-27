@@ -6,7 +6,9 @@ import {
   fixture, patch, load, snapshot, change, envFor, paramsFor, restoreEnv, packageFixture, templateDocs,
 } from "./patch-openclaw-npm-dist.fixtures.mjs";
 
-for (const asyncStore of [false, true]) test(`MCP OAuth ${asyncStore ? "async" : "sync"} requires issuer-bound stored credentials`, async (t) => {
+for (const storeMode of ["sync", "async", "lease-free"]) test(`MCP OAuth ${storeMode} requires issuer-bound stored credentials`, async (t) => {
+  const asyncStore = storeMode !== "sync";
+  const leaseFree = storeMode === "lease-free";
   const f = fixture(t, "mjs");
   const name = "mcp-oauth-fixture.mjs";
   fs.writeFileSync(path.join(f.root, "dist", name), `
@@ -15,7 +17,14 @@ export function setStore(value) { store = value; }
 function readMcpOAuthStore() { return store; }
 async function readStore() { return store; }
 function canReuseStoredTokens() { return true; }
+${leaseFree ? `function isStoredMcpOAuthAccessTokenUsable(store, params) {
+  const tokens = store.tokens;
+  if (!tokens?.access_token || params.rejectedAccessToken === tokens.access_token) return false;
+  return true;
+}` : ""}
 export async function resolveMcpOAuthAccessToken(params) {
+  ${leaseFree ? `const store = await readStore();
+  if (isStoredMcpOAuthAccessTokenUsable(store, params)) return store.tokens.access_token;` : ""}
   const tokens = readMcpOAuthStore().tokens;
   if (!tokens?.access_token) throw new Error("requires OAuth authorization");
   return tokens.access_token;

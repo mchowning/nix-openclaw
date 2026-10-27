@@ -222,6 +222,12 @@ if (providerFiles.length) {
     requireContract(source.split(missingToken).length === 2, "MCP OAuth access token entry point");
     patchedProvider = patchedProvider.replace(missingToken,
       'if (!tokens?.access_token || typeof tokens.issuer !== "string" || !tokens.issuer)');
+    if (source.includes("function isStoredMcpOAuthAccessTokenUsable(")) {
+      const reusableToken = "if (!tokens?.access_token || params.rejectedAccessToken === tokens.access_token)";
+      requireContract(source.split(reusableToken).length === 2, "MCP OAuth lease-free token predicate");
+      patchedProvider = patchedProvider.replace(reusableToken,
+        'if (!tokens?.access_token || typeof tokens.issuer !== "string" || !tokens.issuer || params.rejectedAccessToken === tokens.access_token)');
+    }
   }
   oauthPatches.push([name, patchedProvider]);
 }
